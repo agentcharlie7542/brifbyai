@@ -37,3 +37,6 @@ db/migrations/meta/_journal.json.bak
 
 # claude code session files (if any are written into the project root)
 .claude/
+
+# local PDF + manifest storage (Phase 1 dev fallback for Vercel Blob/Postgres)
+uploads/
