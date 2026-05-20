@@ -1,0 +1,40 @@
+{
+  "category": "cosmetic",
+  "categoryLabel": "化粧品",
+  "description": "厚労省 化粧品 効能・効果の範囲 56項目に基づく規칙. v2.0 초안 — 출처 검수 후 확장.",
+  "ng": [
+    {
+      "id": "cosmetic.ng.cure",
+      "patterns": ["治る", "治す", "完治"],
+      "reason": "치료 표현은 의약품에만 허용",
+      "suggestions": ["健やかな印象に", "整える"]
+    },
+    {
+      "id": "cosmetic.ng.spot_removal",
+      "patterns": ["シミを消す", "シミが消える"],
+      "reason": "화장품 56효능 범위 초과",
+      "suggestions": ["シミ・そばかすを目立たなくする印象に"]
+    },
+    {
+      "id": "cosmetic.ng.anti_aging",
+      "patterns": ["アンチエイジング", "若返り"],
+      "reason": "노화 회복 표현은 금지",
+      "suggestions": ["年齢に応じたケア", "ハリのある印象に"]
+    }
+  ],
+  "warn": [
+    {
+      "id": "cosmetic.warn.lifting",
+      "patterns": ["リフトアップ"],
+      "reason": "물리적 인양 표현 — 단독 사용 시 NG가 될 수 있음",
+      "suggestions": ["フェイスラインを整えるサポート"]
+    }
+  ],
+  "safe": [
+    "肌にうるおいを与える",
+    "皮膚をすこやかに保つ",
+    "肌をひきしめる",
+    "肌荒れを防ぐ",
+    "メーキャップ効果"
+  ]
+}

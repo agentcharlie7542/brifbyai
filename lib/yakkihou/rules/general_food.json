@@ -1,0 +1,15 @@
+{
+  "category": "general_food",
+  "categoryLabel": "一般食品",
+  "description": "일반 식품 — 일체의 보건 효과 표현 금지.",
+  "ng": [
+    {
+      "id": "general_food.ng.health",
+      "patterns": ["健康になる", "効く", "治る"],
+      "reason": "일반 식품에는 건강 효과 표현 금지",
+      "suggestions": ["美味しい", "毎日のおやつに"]
+    }
+  ],
+  "warn": [],
+  "safe": []
+}

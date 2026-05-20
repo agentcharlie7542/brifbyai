@@ -1,0 +1,45 @@
+{
+  "category": "health_food",
+  "categoryLabel": "健康食品",
+  "description": "약기법 + 식품표시법 + 경품표시법 기반 일반 건강식품 규칙. v2.0 초안.",
+  "ng": [
+    {
+      "id": "health_food.ng.diet",
+      "patterns": ["痩せる", "脂肪燃焼", "体重減少"],
+      "reason": "신체 변화 단언 — 의약품 표현",
+      "suggestions": ["スタイルケアをサポート", "毎日の習慣に"]
+    },
+    {
+      "id": "health_food.ng.immunity",
+      "patterns": ["免疫力アップ", "免疫力向上"],
+      "reason": "기능성표시식품으로 신고된 경우 외 금지",
+      "suggestions": ["毎日の健康習慣に", "コンディションサポート"]
+    },
+    {
+      "id": "health_food.ng.cure",
+      "patterns": ["治る", "予防", "治療"],
+      "reason": "의약품적 효능 표현",
+      "suggestions": ["健やかな毎日を応援"]
+    }
+  ],
+  "warn": [
+    {
+      "id": "health_food.warn.detox",
+      "patterns": ["デトックス"],
+      "reason": "의약품적 작용 암시 우려",
+      "suggestions": ["リフレッシュ感", "すっきり感"]
+    },
+    {
+      "id": "health_food.warn.shining",
+      "patterns": ["肌がぴかぴか"],
+      "reason": "사진 표현 과장 — 맥락 검토 필요",
+      "suggestions": ["肌印象を整える"]
+    }
+  ],
+  "safe": [
+    "ビタミンC配合",
+    "1日1粒",
+    "毎日の健康習慣に",
+    "栄養補給に"
+  ]
+}

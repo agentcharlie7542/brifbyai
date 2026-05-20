@@ -1,0 +1,15 @@
+{
+  "category": "quasi_drug",
+  "categoryLabel": "医薬部外品",
+  "description": "의약부외품 승인 효능 범위 내에서만 사용. 실제 승인 텍스트는 제품별로 다르므로 product.approvedClaims 참조.",
+  "ng": [
+    {
+      "id": "quasi_drug.ng.over_claim",
+      "patterns": ["完治", "治癒", "効果絶大"],
+      "reason": "의약품 표현",
+      "suggestions": ["승인된 효능 표현 사용"]
+    }
+  ],
+  "warn": [],
+  "safe": []
+}
