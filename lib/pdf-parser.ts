@@ -96,40 +96,76 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<{
   return { text, pages: numpages };
 }
 
+const REQUEST_TIMEOUT_MS = 90_000;
+const MAX_ATTEMPTS = 2;
+
+async function callClaudeOnce(
+  rawText: string,
+  apiKey: string,
+  model: string
+): Promise<StructuredOrientSheet> {
+  // 매번 신규 클라이언트 — undici keep-alive pool 오염 방지
+  const client = new Anthropic({ apiKey, maxRetries: 0 });
+
+  const truncated = rawText.length > 12000 ? rawText.slice(0, 12000) : rawText;
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  try {
+    const response = await client.messages.create(
+      {
+        model,
+        // 4096 은 sentenceHints 가 긴 PDF 에서 JSON 잘림 빈발. 8192 로 충분한 여유 확보.
+        max_tokens: 8192,
+        system: STRUCTURE_SYSTEM_PROMPT,
+        messages: [
+          {
+            role: 'user',
+            content: `다음은 PDF에서 추출한 오리엔트시트 원본 텍스트입니다. JSON 으로 구조화하세요.\n\n${truncated}`,
+          },
+        ],
+      },
+      { signal: controller.signal }
+    );
+
+    const textPart = response.content.find((c) => c.type === 'text');
+    if (!textPart || textPart.type !== 'text') {
+      throw new Error('Claude 응답에 텍스트 콘텐츠가 없습니다');
+    }
+    try {
+      return JSON.parse(extractJson(textPart.text)) as StructuredOrientSheet;
+    } catch (err) {
+      throw new Error(
+        `Claude 응답 JSON 파싱 실패: ${(err as Error).message}\n응답 본문 일부:\n${textPart.text.slice(0, 400)}`
+      );
+    }
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export async function structureWithClaude(
   rawText: string,
   apiKey: string,
   modelOverride?: string
 ): Promise<StructuredOrientSheet> {
-  const client = new Anthropic({ apiKey });
   const model = modelOverride ?? process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
-
-  // 너무 긴 PDF 는 앞부분만 보냄 (학습 컨텍스트라 첫 8000자면 충분)
-  const truncated = rawText.length > 12000 ? rawText.slice(0, 12000) : rawText;
-
-  const response = await client.messages.create({
-    model,
-    max_tokens: 4096,
-    system: STRUCTURE_SYSTEM_PROMPT,
-    messages: [
-      {
-        role: 'user',
-        content: `다음은 PDF에서 추출한 오리엔트시트 원본 텍스트입니다. JSON 으로 구조화하세요.\n\n${truncated}`,
-      },
-    ],
-  });
-
-  const textPart = response.content.find((c) => c.type === 'text');
-  if (!textPart || textPart.type !== 'text') {
-    throw new Error('Claude 응답에 텍스트 콘텐츠가 없습니다');
+  let lastErr: unknown;
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    try {
+      return await callClaudeOnce(rawText, apiKey, model);
+    } catch (err) {
+      lastErr = err;
+      const msg = err instanceof Error ? err.message : String(err);
+      // JSON 파싱 실패는 재시도해도 동일하므로 즉시 포기
+      if (msg.startsWith('Claude 응답 JSON 파싱 실패')) throw err;
+      if (attempt < MAX_ATTEMPTS) {
+        await new Promise((r) => setTimeout(r, 1500));
+      }
+    }
   }
-  try {
-    return JSON.parse(extractJson(textPart.text)) as StructuredOrientSheet;
-  } catch (err) {
-    throw new Error(
-      `Claude 응답 JSON 파싱 실패: ${(err as Error).message}\n응답 본문 일부:\n${textPart.text.slice(0, 400)}`
-    );
-  }
+  throw lastErr instanceof Error ? lastErr : new Error(String(lastErr));
 }
 
 export async function parseAndStructurePdf(
