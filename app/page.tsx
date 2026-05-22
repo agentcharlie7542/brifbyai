@@ -25,6 +25,13 @@ export default function HomePage() {
             <Sparkles className="mr-2 h-4 w-4" />새 시트 만들기
           </Link>
           <Link
+            href="/validate"
+            className="inline-flex h-11 items-center justify-center rounded-md border border-input bg-background px-6 text-sm font-medium shadow-sm transition-colors hover:bg-accent"
+          >
+            <ShieldCheck className="mr-2 h-4 w-4" />
+            약기법 검증 플레이그라운드
+          </Link>
+          <Link
             href="/admin/seed"
             className="inline-flex h-11 items-center justify-center rounded-md border border-input bg-background px-6 text-sm font-medium shadow-sm transition-colors hover:bg-accent"
           >
