@@ -1,33 +1,71 @@
 {
   "category": "cosmetic",
   "categoryLabel": "化粧品",
-  "description": "厚労省 化粧品 効能・効果の範囲 56項目に基づく規칙. v2.0 초안 — 출처 검수 후 확장.",
+  "description": "후생노동성 화장품 효능·효과 56항목 범위 기준 v0.2.",
   "ng": [
     {
       "id": "cosmetic.ng.cure",
-      "patterns": ["治る", "治す", "完治"],
+      "patterns": ["治る", "治す", "完治", "治癒", "治療"],
       "reason": "치료 표현은 의약품에만 허용",
       "suggestions": ["健やかな印象に", "整える"]
     },
     {
       "id": "cosmetic.ng.spot_removal",
-      "patterns": ["シミを消す", "シミが消える"],
-      "reason": "화장품 56효능 범위 초과",
-      "suggestions": ["シミ・そばかすを目立たなくする印象に"]
+      "patterns": ["シミを消す", "シミが消える", "シミ消し", "そばかすを消す"],
+      "reason": "화장품 56효능 범위 초과 (소실 표현 금지)",
+      "suggestions": ["シミ・そばかすを目立たなくする印象に", "肌印象を整える"]
+    },
+    {
+      "id": "cosmetic.ng.wrinkle_removal",
+      "patterns": ["シワを消す", "シワがなくなる", "シワ取り"],
+      "reason": "주름 소실 표현 금지 (주름 개선은 약사부 효능 검증품에 한함)",
+      "suggestions": ["年齢を感じさせない印象に", "ハリ印象アップ"]
     },
     {
       "id": "cosmetic.ng.anti_aging",
-      "patterns": ["アンチエイジング", "若返り"],
-      "reason": "노화 회복 표현은 금지",
+      "patterns": ["アンチエイジング", "若返り", "若返る", "老化を防ぐ"],
+      "reason": "노화 회복 표현 금지",
       "suggestions": ["年齢に応じたケア", "ハリのある印象に"]
+    },
+    {
+      "id": "cosmetic.ng.acne_cure",
+      "patterns": ["ニキビが治る", "ニキビを治す", "ニキビ予防"],
+      "requires": [],
+      "reason": "여드름 치료·예방은 의약품·의약부외품 효능",
+      "suggestions": ["肌印象を整える"]
+    },
+    {
+      "id": "cosmetic.ng.medical_words",
+      "patterns": ["効能", "効果", "薬用"],
+      "requires": ["シミ", "シワ", "ニキビ", "アトピー", "湿疹", "炎症"],
+      "reason": "화장품에 의약품적 효능 단어 사용 금지",
+      "suggestions": []
+    },
+    {
+      "id": "cosmetic.ng.skin_renewal",
+      "patterns": ["細胞を再生", "肌が生まれ変わる", "肌再生"],
+      "reason": "세포 재생은 의약품 효능",
+      "suggestions": ["うるおいケア", "ハリ印象ケア"]
     }
   ],
   "warn": [
     {
       "id": "cosmetic.warn.lifting",
       "patterns": ["リフトアップ"],
-      "reason": "물리적 인양 표현 — 단독 사용 시 NG가 될 수 있음",
+      "reason": "물리적 인양 표현 — 단독 사용 시 NG로 판정될 수 있음",
       "suggestions": ["フェイスラインを整えるサポート"]
+    },
+    {
+      "id": "cosmetic.warn.whitening",
+      "patterns": ["美白", "ホワイトニング"],
+      "reason": "미백은 약사부 의약부외품 승인 효능 — 화장품에서는 'メラニンの生成を抑え、シミ・そばかすを防ぐ' 등 정해진 표현만 가능",
+      "suggestions": ["明るい印象に", "透明感のある印象に"]
+    },
+    {
+      "id": "cosmetic.warn.medical_grade",
+      "patterns": ["医療レベル", "皮膚科レベル", "クリニック級"],
+      "reason": "의료 비교 광고 — 의약품 오인 가능성",
+      "suggestions": ["毎日のスキンケアに"]
     }
   ],
   "safe": [
@@ -35,6 +73,9 @@
     "皮膚をすこやかに保つ",
     "肌をひきしめる",
     "肌荒れを防ぐ",
-    "メーキャップ効果"
+    "皮膚にうるおいを与える",
+    "皮膚をやわらげる",
+    "メーキャップ効果",
+    "メラニンの生成を抑え、シミ・そばかすを防ぐ"
   ]
 }

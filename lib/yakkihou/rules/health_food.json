@@ -1,45 +1,137 @@
 {
   "category": "health_food",
   "categoryLabel": "健康食品",
-  "description": "약기법 + 식품표시법 + 경품표시법 기반 일반 건강식품 규칙. v2.0 초안.",
+  "description": "약기법 + 식품표시법 + 경품표시법 기반 일반 건강식품 규칙. iHEAL 골든 케이스로 검증된 v0.2.",
   "ng": [
     {
-      "id": "health_food.ng.diet",
-      "patterns": ["痩せる", "脂肪燃焼", "体重減少"],
-      "reason": "신체 변화 단언 — 의약품 표현",
+      "id": "health_food.ng.cure_words",
+      "patterns": ["治る", "治す", "完治", "治癒", "治療"],
+      "reason": "치료 표현은 의약품에만 허용",
+      "suggestions": ["健やかな毎日を応援", "コンディションサポート"]
+    },
+    {
+      "id": "health_food.ng.prevent",
+      "patterns": ["予防"],
+      "reason": "질병 예방 표현은 의약품에만 허용",
+      "suggestions": ["毎日のケア習慣に"]
+    },
+    {
+      "id": "health_food.ng.diet_burning",
+      "patterns": ["脂肪燃焼", "脂肪を燃やす", "脂肪が燃える", "体重減少", "痩せる", "痩身", "燃焼系"],
+      "reason": "신체 변화 단언 — 의약품적 효능 표현",
       "suggestions": ["スタイルケアをサポート", "毎日の習慣に"]
     },
     {
-      "id": "health_food.ng.immunity",
-      "patterns": ["免疫力アップ", "免疫力向上"],
-      "reason": "기능성표시식품으로 신고된 경우 외 금지",
+      "id": "health_food.ng.immunity_up",
+      "patterns": ["免疫力アップ", "免疫力向上", "免疫力を高める", "免疫機能を強化"],
+      "reason": "기능성표시식품 신고된 경우 외 금지",
       "suggestions": ["毎日の健康習慣に", "コンディションサポート"]
     },
     {
-      "id": "health_food.ng.cure",
-      "patterns": ["治る", "予防", "治療"],
-      "reason": "의약품적 효능 표현",
-      "suggestions": ["健やかな毎日を応援"]
+      "id": "health_food.ng.disease_improvement",
+      "patterns": [
+        "PCOS",
+        "PMS",
+        "生理痛",
+        "生理不順",
+        "更年期",
+        "糖尿病",
+        "高血圧",
+        "高脂血症",
+        "不眠",
+        "アトピー",
+        "アレルギー",
+        "花粉症",
+        "便秘",
+        "下痢",
+        "胃炎",
+        "腰痛",
+        "肩こり",
+        "鬱",
+        "うつ"
+      ],
+      "requires": ["改善", "効果", "効く", "治", "軽減", "緩和", "解消"],
+      "reason": "질환·증상명 + 효능 표현 결합 = 의약품적 효능 단정",
+      "suggestions": ["デリケートな悩みのある方のセルフケアに", "毎日の習慣でコンディションをサポート"]
+    },
+    {
+      "id": "health_food.ng.effect_assertion",
+      "patterns": ["効果あり", "効果あります", "効果絶大", "効きます", "効きました"],
+      "reason": "효능 단정 표현 — 의약품 광고에 해당",
+      "suggestions": ["感じやすい習慣に", "実感サポート"]
+    },
+    {
+      "id": "health_food.ng.safety_guarantee",
+      "patterns": ["副作用なし", "安心安全", "100%安全"],
+      "reason": "안전성 단언 — 의약품 광고와 동일 취급",
+      "suggestions": ["毎日のセルフケアに"]
+    },
+    {
+      "id": "health_food.ng.medical_recommend",
+      "patterns": ["医師推薦", "医師おすすめ", "病院でも使われている", "クリニック処方"],
+      "reason": "의료 권위 차용 광고 금지",
+      "suggestions": []
     }
   ],
   "warn": [
     {
       "id": "health_food.warn.detox",
-      "patterns": ["デトックス"],
-      "reason": "의약품적 작용 암시 우려",
+      "patterns": ["デトックス", "毒素排出"],
+      "reason": "의약품적 작용 암시 우려 — 단독 사용 회피",
       "suggestions": ["リフレッシュ感", "すっきり感"]
     },
     {
-      "id": "health_food.warn.shining",
-      "patterns": ["肌がぴかぴか"],
-      "reason": "사진 표현 과장 — 맥락 검토 필요",
-      "suggestions": ["肌印象を整える"]
+      "id": "health_food.warn.suppress_body",
+      "patterns": ["を抑える", "を抑えます"],
+      "requires": ["かゆみ", "におい", "オリモノ", "悪玉菌", "炎症", "湿疹", "痛み"],
+      "reason": "신체 증상·세균을 '억제'한다는 표현 — 의약품적 효능 암시",
+      "suggestions": ["気になる方のセルフケアに"]
+    },
+    {
+      "id": "health_food.warn.bacteria_balance",
+      "patterns": [
+        "善玉菌を増や",
+        "善玉菌が増え",
+        "悪玉菌を減ら",
+        "悪玉菌を抑え"
+      ],
+      "reason": "균총 변화 단언 — 기능성표시 미신고 시 그레이존. 활용형 무관히 잡도록 어간 매칭.",
+      "suggestions": ["毎日の健康習慣に"]
+    },
+    {
+      "id": "health_food.warn.body_type",
+      "patterns": ["体質改善", "体型管理", "体質・体型"],
+      "reason": "체질·체형 단언은 약기법·경표법 그레이존",
+      "suggestions": ["毎日の習慣として"]
+    },
+    {
+      "id": "health_food.warn.hormone",
+      "patterns": ["ホルモンバランスを整える", "ホルモン分泌"],
+      "reason": "내분비계 효능 표현 — 기능성표시식품 외 그레이존",
+      "suggestions": ["女性のリズムに寄り添う"]
+    },
+    {
+      "id": "health_food.warn.skin_food",
+      "patterns": ["肌がきれいになる", "美肌になる", "シミに効く"],
+      "reason": "피부 효능 표현 — 화장품·의약부외품 영역",
+      "suggestions": ["毎日の美容習慣に"]
+    },
+    {
+      "id": "health_food.warn.safe_for_pregnant",
+      "patterns": ["妊婦でも安全", "妊婦の方でも安全に服用"],
+      "reason": "임산부 대상 안전성 단언 — 의약품적 표현으로 취급 가능",
+      "suggestions": ["妊娠中の方は医師にご相談の上"]
     }
   ],
   "safe": [
     "ビタミンC配合",
+    "鉄分配合",
+    "クランベリー配合",
     "1日1粒",
+    "1日1回",
     "毎日の健康習慣に",
-    "栄養補給に"
+    "栄養補給に",
+    "韓国特許取得",
+    "続けやすい"
   ]
 }
