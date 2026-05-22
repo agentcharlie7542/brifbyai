@@ -10,7 +10,6 @@
 import Anthropic from '@anthropic-ai/sdk';
 // pdf-parse 의 index.js 가 모듈 로드 시 테스트 PDF 를 읽어 ENOENT 가 나는
 // 알려진 버그가 있어, 내부 구현 파일을 직접 import 한다.
-// eslint-disable-next-line @typescript-eslint/no-require-imports
 const pdfParse = require('pdf-parse/lib/pdf-parse.js') as (
   data: Buffer
 ) => Promise<{ text: string; numpages: number; info?: unknown }>;
