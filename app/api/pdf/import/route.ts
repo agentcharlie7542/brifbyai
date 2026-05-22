@@ -2,18 +2,15 @@ import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
 import { parseAndStructurePdf } from '@/lib/pdf-parser';
-import {
-  ensureSeedBrands,
-  getBrand,
-  saveReferenceSheet,
-} from '@/lib/storage/local';
+import { getBrand } from '@/lib/db/repositories/brands';
+import { createReferenceSheet } from '@/lib/db/repositories/reference-sheets';
+import { uploadPdf } from '@/lib/storage/blob';
 
 export const runtime = 'nodejs';
-// PDF + Claude 라운드트립이 길어질 수 있어 한도 늘림.
 export const maxDuration = 60;
 
 const FormSchema = z.object({
-  brandId: z.string().min(1),
+  brandId: z.string().uuid(),
 });
 
 export async function POST(req: Request) {
@@ -30,12 +27,11 @@ export async function POST(req: Request) {
     const parsed = FormSchema.safeParse({ brandId: form.get('brandId') });
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'brandId 가 누락되었습니다.', details: parsed.error.flatten() },
+        { error: 'brandId 가 누락되었거나 형식이 잘못되었습니다.', details: parsed.error.flatten() },
         { status: 400 }
       );
     }
 
-    await ensureSeedBrands();
     const brand = await getBrand(parsed.data.brandId);
     if (!brand) {
       return NextResponse.json(
@@ -64,12 +60,18 @@ export async function POST(req: Request) {
       apiKey
     );
 
-    const saved = await saveReferenceSheet({
+    const uploaded = await uploadPdf({
       brandId: brand.id,
       fileName: file.name,
-      pdfBytes: buffer,
+      bytes: buffer,
+    });
+
+    const saved = await createReferenceSheet({
+      brandId: brand.id,
+      fileName: file.name,
+      storageUrl: uploaded.url,
       parsedText: rawText,
-      structured,
+      structured: structured as Record<string, unknown>,
       pages,
     });
 

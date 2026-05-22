@@ -1,11 +1,11 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
-import { ensureSeedBrands, getReferenceSheet } from '@/lib/storage/local';
+import { getBrand } from '@/lib/db/repositories/brands';
+import { getReferenceSheet } from '@/lib/db/repositories/reference-sheets';
 import { YakkihouValidator } from '@/components/yakkihou-validator';
 
 export const dynamic = 'force-dynamic';
 
-// 브랜드명 → 약기법 카테고리 휴리스틱. 향후 product.category 로 대체.
 function inferCategory(brandName?: string): string {
   if (!brandName) return 'health_food';
   if (brandName.includes('아이힐') || brandName.includes('iHEAL')) return 'health_food';
@@ -16,30 +16,40 @@ function inferCategory(brandName?: string): string {
 export default async function ReferenceSheetDetailPage({
   params,
 }: {
-  params: { id: string };
+  params: { brandId: string; id: string };
 }) {
-  const sheet = await getReferenceSheet(params.id);
-  if (!sheet) notFound();
-
-  const brands = await ensureSeedBrands();
-  const brand = brands.find((b) => b.id === sheet.brandId);
+  const [brand, sheet] = await Promise.all([
+    getBrand(params.brandId),
+    getReferenceSheet(params.id),
+  ]);
+  if (!brand || !sheet || sheet.brandId !== brand.id) notFound();
 
   return (
-    <main className="container py-12">
+    <main className="px-10 py-10">
       <div className="mx-auto max-w-4xl">
         <Link
-          href="/admin/seed"
+          href={`/brands/${brand.id}/library`}
           className="text-sm text-muted-foreground hover:underline"
         >
-          ← 학습 데이터 목록
+          ← 학습 PDF 목록
         </Link>
         <h1 className="mt-2 break-all text-2xl font-bold tracking-tight">
           {sheet.fileName}
         </h1>
         <p className="mt-1 text-sm text-muted-foreground">
-          {brand?.name ?? sheet.brandId} · {sheet.pages ?? '?'}p ·{' '}
+          {brand.name} · {sheet.pages ?? '?'}p ·{' '}
           {new Date(sheet.uploadedAt).toLocaleString('ko-KR')}
         </p>
+        {sheet.storageUrl ? (
+          <a
+            href={sheet.storageUrl}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-block text-xs text-primary hover:underline"
+          >
+            원본 PDF 열기 ↗
+          </a>
+        ) : null}
 
         <section className="mt-10">
           <h2 className="mb-2 text-base font-semibold">
@@ -52,7 +62,7 @@ export default async function ReferenceSheetDetailPage({
           </p>
           <YakkihouValidator
             initialText={sheet.parsedText || ''}
-            initialCategory={inferCategory(brand?.name)}
+            initialCategory={inferCategory(brand.name)}
           />
         </section>
 

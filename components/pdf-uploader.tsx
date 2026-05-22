@@ -3,7 +3,6 @@
 import { useCallback, useMemo, useState } from 'react';
 import { CheckCircle2, FileUp, Loader2, XCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import type { BrandRecord } from '@/lib/storage/local';
 
 type Status = 'queued' | 'uploading' | 'done' | 'error';
 
@@ -17,8 +16,13 @@ interface FileItem {
   };
 }
 
-export function PdfUploader({ brands }: { brands: BrandRecord[] }) {
-  const [brandId, setBrandId] = useState(brands[0]?.id ?? '');
+export function PdfUploader({
+  brandId,
+  brandName,
+}: {
+  brandId: string;
+  brandName: string;
+}) {
   const [items, setItems] = useState<FileItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [isUploading, setUploading] = useState(false);
@@ -45,9 +49,7 @@ export function PdfUploader({ brands }: { brands: BrandRecord[] }) {
   }, []);
 
   async function uploadAll() {
-    if (!brandId) return;
     setUploading(true);
-    // Sequential to keep memory + Claude rate limit predictable.
     for (let i = 0; i < items.length; i += 1) {
       if (items[i].status !== 'queued') continue;
       // eslint-disable-next-line no-await-in-loop
@@ -98,21 +100,10 @@ export function PdfUploader({ brands }: { brands: BrandRecord[] }) {
 
   return (
     <div className="space-y-6">
-      <div>
-        <label className="block text-sm font-medium">브랜드</label>
-        <select
-          value={brandId}
-          onChange={(e) => setBrandId(e.target.value)}
-          className="mt-2 w-full max-w-xs rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm outline-none focus:ring-2 focus:ring-ring"
-        >
-          {brands.map((b) => (
-            <option key={b.id} value={b.id}>
-              {b.name}
-              {b.nameJa ? ` (${b.nameJa})` : ''}
-            </option>
-          ))}
-        </select>
-      </div>
+      <p className="text-sm text-muted-foreground">
+        업로드 대상 브랜드 ·{' '}
+        <span className="font-medium text-foreground">{brandName}</span>
+      </p>
 
       <div
         onDragOver={(e) => {
@@ -173,7 +164,7 @@ export function PdfUploader({ brands }: { brands: BrandRecord[] }) {
               <button
                 type="button"
                 onClick={uploadAll}
-                disabled={isUploading || summary.pending === 0 || !brandId}
+                disabled={isUploading || summary.pending === 0}
                 className="inline-flex items-center rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground shadow disabled:opacity-50"
               >
                 {isUploading ? (

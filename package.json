@@ -10,7 +10,8 @@
     "typecheck": "tsc --noEmit",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
-    "db:studio": "drizzle-kit studio"
+    "db:studio": "drizzle-kit studio",
+    "db:seed": "node --env-file=.env.local scripts/seed-brands.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",
