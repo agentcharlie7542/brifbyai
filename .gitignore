@@ -40,3 +40,4 @@ db/migrations/meta/_journal.json.bak
 
 # local PDF + manifest storage (Phase 1 dev fallback for Vercel Blob/Postgres)
 uploads/
+.env*
