@@ -17,6 +17,9 @@ export interface YakkihouRulePattern {
    *  예: patterns=['PCOS','PMS','生理痛'] + requires=['改善','効果','効く']
    *      → '질환명 + 효능 동사' 조합만 NG 로 잡고, 질환명 단독 언급(증상 공유 글)은 통과. */
   requires?: string[];
+  /** 옵션. 이 목록 중 하나라도 문장에 등장하면 룰 발동을 **억제**.
+   *  예: '白くなった気がする' 처럼 완화어(気がする/かも/感じる)가 있으면 NG 격하. */
+  excludes?: string[];
   reason: string;
   suggestions: string[];
 }

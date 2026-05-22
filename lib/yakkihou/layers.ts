@@ -21,6 +21,10 @@ function findMatch(sentence: string, rule: YakkihouRulePattern): string | null {
     const hasAnyRequired = rule.requires.some((r) => sentence.includes(r));
     if (!hasAnyRequired) return null;
   }
+  if (rule.excludes && rule.excludes.length > 0) {
+    const hasAnyExcluder = rule.excludes.some((e) => sentence.includes(e));
+    if (hasAnyExcluder) return null;
+  }
   return trigger;
 }
 

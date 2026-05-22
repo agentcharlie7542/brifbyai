@@ -18,8 +18,9 @@
 const ENDPOINT = process.env.BRIFBYAI_BASE ?? 'http://localhost:3000';
 const FULL = process.argv.includes('--full');
 
-/** Phase 1 Sonnet ground truth (iHEAL ヴィーナス乳酸菌 PDF) */
+/** Phase 1 Sonnet ground truth (iHEAL + 동아제약 PDF 발췌) */
 const GOLDEN = [
+  // ── iHEAL ヴィーナス乳酸菌 ──────────────────────────────
   {
     text: '韓国特許取得乳酸菌が、膣内＋腸内環境を整えます',
     expected: 'SAFE',
@@ -64,6 +65,48 @@ const GOLDEN = [
     text: '1日1粒摂取で続けやすい（朝推奨）',
     expected: 'SAFE',
     note: '사용법',
+  },
+  // ── 동아제약 アイロ ホワイタチオン (whitening) ──────────
+  {
+    text: '外側からは塗る日焼け止め、内側からは飲む日焼け止めでWの紫外線対策！',
+    expected: 'NG',
+    note: '飲む日焼け止め + 紫外線対策',
+  },
+  {
+    text: 'グルタチオン配合で内側から透明感を上げることができ、抗酸化&メラニン合成の抑制&肌のトーンケアができる',
+    expected: 'NG',
+    note: 'メラニン合成の抑制',
+  },
+  {
+    text: '「食べる日焼け止め」と言われる通常のトマトの5倍の効果があるホワイトトマト成分をたっぷり配合',
+    expected: 'NG',
+    note: '食べる日焼け止め + 比較効능',
+  },
+  {
+    text: '飲み始めてから、白くなった気がする、日焼けにくくなった、透明感が上がった',
+    expected: 'WARN',
+    note: '체험담형 효능',
+  },
+  {
+    text: '毎日摂取することで内側から透き通るような透明肌に',
+    expected: 'WARN',
+    note: '透明肌 + 内側から',
+  },
+  {
+    text: 'グルタチオン酵母1200mgやビタミンC,Eに加え、ホワイトトマト成分も100mg配合',
+    expected: 'SAFE',
+    note: '성분량 표기만 (비교 효능 제거)',
+  },
+  // ── 동아제약 アイロ ダイエット ─────────────────────────
+  {
+    text: '体脂肪減少・血糖管理・ダイエットが可能なサプリメント',
+    expected: 'NG',
+    note: '体脂肪減少 + 血糖管理 + ダイエットが可能',
+  },
+  {
+    text: '脂肪分解を促進し、脂肪の蓄積を抑える',
+    expected: 'NG',
+    note: '脂肪分解 + 脂肪蓄積を抑える',
   },
 ];
 
