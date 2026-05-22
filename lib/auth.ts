@@ -1,15 +1,22 @@
-import { createHash } from 'crypto';
-
 export const AUTH_COOKIE = 'brifbyai_auth';
 
-export function createPasswordToken(password: string): string {
-  return createHash('sha256').update(password).digest('hex');
+async function sha256Hex(text: string): Promise<string> {
+  const buf = new TextEncoder().encode(text);
+  const digest = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(digest))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
 
-export function verifyPasswordToken(
+export async function createPasswordToken(password: string): Promise<string> {
+  return sha256Hex(password);
+}
+
+export async function verifyPasswordToken(
   token: string | undefined,
   password: string | undefined
-): boolean {
+): Promise<boolean> {
   if (!token || !password) return false;
-  return token === createPasswordToken(password);
+  const expected = await sha256Hex(password);
+  return token === expected;
 }

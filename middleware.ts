@@ -3,7 +3,7 @@ import { AUTH_COOKIE, verifyPasswordToken } from '@/lib/auth';
 
 const PUBLIC_PATHS = ['/login'];
 
-export function middleware(req: NextRequest) {
+export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
   if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
@@ -17,7 +17,7 @@ export function middleware(req: NextRequest) {
   }
 
   const token = req.cookies.get(AUTH_COOKIE)?.value;
-  if (verifyPasswordToken(token, password)) {
+  if (await verifyPasswordToken(token, password)) {
     return NextResponse.next();
   }
 

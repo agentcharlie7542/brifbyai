@@ -1,6 +1,6 @@
 import { redirect } from 'next/navigation';
 import { cookies } from 'next/headers';
-import { AUTH_COOKIE, verifyPasswordToken, createPasswordToken } from '@/lib/auth';
+import { AUTH_COOKIE, createPasswordToken } from '@/lib/auth';
 
 async function loginAction(formData: FormData) {
   'use server';
@@ -16,7 +16,7 @@ async function loginAction(formData: FormData) {
     redirect('/login?error=1');
   }
 
-  const token = createPasswordToken(expected);
+  const token = await createPasswordToken(expected);
   cookies().set(AUTH_COOKIE, token, {
     httpOnly: true,
     sameSite: 'lax',
