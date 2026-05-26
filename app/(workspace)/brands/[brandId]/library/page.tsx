@@ -1,17 +1,21 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
+import { unstable_noStore as noStore } from 'next/cache';
 import { FileText } from 'lucide-react';
 import { getBrand } from '@/lib/db/repositories/brands';
 import { listReferenceSheetsByBrand } from '@/lib/db/repositories/reference-sheets';
 import { PdfUploader } from '@/components/pdf-uploader';
 
 export const dynamic = 'force-dynamic';
+export const revalidate = 0;
+export const fetchCache = 'force-no-store';
 
 export default async function BrandLibraryPage({
   params,
 }: {
   params: { brandId: string };
 }) {
+  noStore();
   const brand = await getBrand(params.brandId);
   if (!brand) notFound();
   const refs = await listReferenceSheetsByBrand(brand.id);
