@@ -95,7 +95,9 @@ export async function extractTextFromPdf(buffer: Buffer): Promise<{
   return { text, pages: numpages };
 }
 
-const REQUEST_TIMEOUT_MS = 90_000;
+// Vercel Hobby 함수 maxDuration(60s) 안에서 안전하게 끝나도록 55s.
+// pdf-parse + DB write 시간을 위해 5s 여유를 둔다.
+const REQUEST_TIMEOUT_MS = 55_000;
 const MAX_ATTEMPTS = 2;
 
 async function callClaudeOnce(
@@ -106,7 +108,7 @@ async function callClaudeOnce(
   // 매번 신규 클라이언트 — undici keep-alive pool 오염 방지
   const client = new Anthropic({ apiKey, maxRetries: 0 });
 
-  const truncated = rawText.length > 12000 ? rawText.slice(0, 12000) : rawText;
+  const truncated = rawText.length > 8000 ? rawText.slice(0, 8000) : rawText;
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
@@ -149,7 +151,7 @@ export async function structureWithClaude(
   apiKey: string,
   modelOverride?: string
 ): Promise<StructuredOrientSheet> {
-  const model = modelOverride ?? process.env.CLAUDE_MODEL ?? 'claude-sonnet-4-6';
+  const model = modelOverride ?? process.env.CLAUDE_MODEL ?? 'claude-haiku-4-5';
   let lastErr: unknown;
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
     try {
