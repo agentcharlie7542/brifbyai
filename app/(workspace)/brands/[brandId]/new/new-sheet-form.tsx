@@ -21,6 +21,7 @@ type State =
   | {
       status: 'error';
       message: string;
+      detail?: string;
       tier?: string;
       httpStatus?: number;
     };
@@ -52,6 +53,7 @@ export function NewSheetForm({ brandId, brandName }: Props) {
         setState({
           status: 'error',
           message: json.error ?? `HTTP ${res.status}`,
+          detail: json.detail,
           tier: json.tier,
           httpStatus: res.status,
         });
@@ -196,6 +198,11 @@ function ErrorPanel({
         <div className="flex-1">
           <p className="font-medium text-yakkihou-ng">가져오기 실패</p>
           <p className="mt-1 text-xs text-foreground/80">{state.message}</p>
+          {state.detail ? (
+            <p className="mt-1 break-all text-[10px] text-foreground/60">
+              {state.detail}
+            </p>
+          ) : null}
           {state.httpStatus ? (
             <p className="mt-1 text-[10px] text-muted-foreground">
               HTTP {state.httpStatus} · tier {state.tier ?? '-'}
