@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import {
   AlertTriangle,
@@ -27,6 +27,14 @@ const CATEGORIES = [
 
 type CategoryValue = (typeof CATEGORIES)[number]['value'];
 
+export interface Finding {
+  text: string;
+  level: 'WARN' | 'NG';
+  rule: string;
+  reason: string;
+  suggestions: string[];
+}
+
 interface SheetSnapshot {
   id: string;
   brandId: string;
@@ -36,7 +44,17 @@ interface SheetSnapshot {
   targetMarket: string;
   createdAt: string;
   content: StructuredOrientSheet;
-  yakkihouSummary: { safe: number; warn: number; ng: number } | null;
+  yakkihouSummary: {
+    safe: number;
+    warn: number;
+    ng: number;
+    findings?: Finding[];
+  } | null;
+}
+
+function findingsFor(text: string | undefined, all: Finding[]): Finding[] {
+  if (!text) return [];
+  return all.filter((f) => text.includes(f.text));
 }
 
 export function SheetView({ initial }: { initial: SheetSnapshot }) {
@@ -89,6 +107,8 @@ export function SheetView({ initial }: { initial: SheetSnapshot }) {
       setSaveError(err instanceof Error ? err.message : 'save failed');
     }
   }
+
+  const findings = initial.yakkihouSummary?.findings ?? [];
 
   // ── 보기 모드 ───────────────────────────────────────────────
   if (!editing) {
@@ -179,12 +199,19 @@ export function SheetView({ initial }: { initial: SheetSnapshot }) {
               <List
                 label="필수 메시지"
                 items={c.content.requiredMessages}
+                findings={findings}
                 full
               />
-              <List label="핵심 메시지" items={c.content.keyMessages} full />
+              <List
+                label="핵심 메시지"
+                items={c.content.keyMessages}
+                findings={findings}
+                full
+              />
               <List
                 label="금지 표현"
                 items={c.content.prohibitedExpressions}
+                findings={findings}
                 full
               />
               {c.content.sampleCopy && c.content.sampleCopy.length > 0 ? (
@@ -193,14 +220,26 @@ export function SheetView({ initial }: { initial: SheetSnapshot }) {
                     샘플 카피
                   </dt>
                   <dd className="space-y-2">
-                    {c.content.sampleCopy.map((cp, i) => (
-                      <blockquote
-                        key={i}
-                        className="rounded-md border-l-2 border-primary/40 bg-muted/40 px-3 py-2 text-sm leading-relaxed"
-                      >
-                        {cp}
-                      </blockquote>
-                    ))}
+                    {c.content.sampleCopy.map((cp, i) => {
+                      const matches = findingsFor(cp, findings);
+                      return (
+                        <div key={i}>
+                          <blockquote className="rounded-md border-l-2 border-primary/40 bg-muted/40 px-3 py-2 text-sm leading-relaxed">
+                            {cp}
+                            {matches.length > 0 ? (
+                              <span className="ml-2 inline-flex gap-1 align-middle">
+                                {matches.map((m, j) => (
+                                  <FindingBadge key={j} finding={m} />
+                                ))}
+                              </span>
+                            ) : null}
+                          </blockquote>
+                          {matches.length > 0 ? (
+                            <FindingDetail findings={matches} />
+                          ) : null}
+                        </div>
+                      );
+                    })}
                   </dd>
                 </div>
               ) : null}
@@ -439,9 +478,10 @@ export function SheetView({ initial }: { initial: SheetSnapshot }) {
               rows={3}
             />
           </EditRow>
-          <EditRow label="필수 메시지 (한 줄에 하나)">
+          <EditRow label="필수 메시지">
             <ListField
               value={draft.content?.requiredMessages ?? []}
+              findings={findings}
               onChange={(arr) =>
                 setDraft({
                   ...draft,
@@ -450,9 +490,10 @@ export function SheetView({ initial }: { initial: SheetSnapshot }) {
               }
             />
           </EditRow>
-          <EditRow label="핵심 메시지 (한 줄에 하나)">
+          <EditRow label="핵심 메시지">
             <ListField
               value={draft.content?.keyMessages ?? []}
+              findings={findings}
               onChange={(arr) =>
                 setDraft({
                   ...draft,
@@ -461,9 +502,10 @@ export function SheetView({ initial }: { initial: SheetSnapshot }) {
               }
             />
           </EditRow>
-          <EditRow label="금지 표현 (한 줄에 하나)">
+          <EditRow label="금지 표현">
             <ListField
               value={draft.content?.prohibitedExpressions ?? []}
+              findings={findings}
               onChange={(arr) =>
                 setDraft({
                   ...draft,
@@ -472,9 +514,10 @@ export function SheetView({ initial }: { initial: SheetSnapshot }) {
               }
             />
           </EditRow>
-          <EditRow label="샘플 카피 (한 줄에 하나)">
+          <EditRow label="샘플 카피">
             <ListField
               value={draft.content?.sampleCopy ?? []}
+              findings={findings}
               onChange={(arr) =>
                 setDraft({
                   ...draft,
@@ -558,10 +601,12 @@ function List({
   label,
   items,
   full,
+  findings,
 }: {
   label: string;
   items?: string[];
   full?: boolean;
+  findings?: Finding[];
 }) {
   if (!items || items.length === 0) return null;
   return (
@@ -570,16 +615,76 @@ function List({
         {label}
       </dt>
       <dd className="mt-0.5">
-        <ul className="space-y-1 text-sm">
-          {items.map((it, i) => (
-            <li key={i} className="flex gap-1.5">
-              <span className="text-muted-foreground">·</span>
-              <span>{it}</span>
-            </li>
-          ))}
+        <ul className="space-y-1.5 text-sm">
+          {items.map((it, i) => {
+            const matches = findingsFor(it, findings ?? []);
+            return (
+              <li key={i}>
+                <div className="flex items-start gap-1.5">
+                  <span className="text-muted-foreground">·</span>
+                  <span className="flex-1">
+                    {it}
+                    {matches.length > 0 ? (
+                      <span className="ml-2 inline-flex gap-1 align-middle">
+                        {matches.map((m, j) => (
+                          <FindingBadge key={j} finding={m} />
+                        ))}
+                      </span>
+                    ) : null}
+                  </span>
+                </div>
+                {matches.length > 0 ? (
+                  <FindingDetail findings={matches} />
+                ) : null}
+              </li>
+            );
+          })}
         </ul>
       </dd>
     </div>
+  );
+}
+
+function FindingBadge({ finding }: { finding: Finding }) {
+  const tone =
+    finding.level === 'NG'
+      ? 'bg-yakkihou-ng text-white'
+      : 'bg-yakkihou-warn text-white';
+  return (
+    <span
+      className={cn(
+        'inline-flex items-center rounded px-1.5 py-0.5 text-[10px] font-semibold',
+        tone
+      )}
+      title={finding.reason}
+    >
+      {finding.level}
+    </span>
+  );
+}
+
+function FindingDetail({ findings }: { findings: Finding[] }) {
+  return (
+    <ul className="ml-4 mt-1 space-y-1 border-l-2 border-yakkihou-warn/40 pl-3 text-xs text-foreground/70">
+      {findings.map((f, i) => (
+        <li key={i}>
+          <span
+            className={cn(
+              'mr-1 font-semibold',
+              f.level === 'NG' ? 'text-yakkihou-ng' : 'text-yakkihou-warn'
+            )}
+          >
+            [{f.level}]
+          </span>
+          {f.reason}
+          {f.suggestions.length > 0 ? (
+            <span className="ml-1 text-muted-foreground">
+              → 대안: {f.suggestions.slice(0, 3).join(' / ')}
+            </span>
+          ) : null}
+        </li>
+      ))}
+    </ul>
   );
 }
 
@@ -734,27 +839,73 @@ function TextArea({
 function ListField({
   value,
   onChange,
+  findings = [],
 }: {
   value: string[];
   onChange: (v: string[]) => void;
+  findings?: Finding[];
 }) {
-  const text = useMemo(() => value.join('\n'), [value]);
+  function updateAt(i: number, v: string) {
+    const next = value.slice();
+    next[i] = v;
+    onChange(next);
+  }
+  function removeAt(i: number) {
+    onChange(value.filter((_, j) => j !== i));
+  }
+  function addRow() {
+    onChange([...value, '']);
+  }
+
   return (
-    <textarea
-      value={text}
-      onChange={(e) => {
-        const lines = e.target.value
-          .split('\n')
-          .map((l) => l.trim())
-          .filter((l) => l.length > 0);
-        // 마지막 줄이 빈 줄이라도 입력 중에는 보존해야 하므로,
-        // 빈 줄만 끝에 있는 경우는 그대로 두고 split 후 trailing empty 제거
-        // (위 filter 가 빈 줄을 모두 제거하므로 입력 중에도 같은 length 유지)
-        onChange(lines);
-      }}
-      rows={Math.max(3, value.length + 1)}
-      placeholder="한 줄에 하나씩 입력"
-      className="w-full rounded-md border border-input bg-background px-3 py-2 font-mono text-sm"
-    />
+    <div className="space-y-1.5">
+      {value.length === 0 ? (
+        <p className="text-xs text-muted-foreground">(비어있음)</p>
+      ) : null}
+      {value.map((item, i) => {
+        const matches = findingsFor(item, findings);
+        return (
+          <div key={i}>
+            <div className="flex items-start gap-2">
+              <input
+                value={item}
+                onChange={(e) => updateAt(i, e.target.value)}
+                className={cn(
+                  'flex-1 rounded-md border bg-background px-3 py-2 text-sm',
+                  matches.some((m) => m.level === 'NG')
+                    ? 'border-yakkihou-ng/50 bg-yakkihou-ng/5'
+                    : matches.some((m) => m.level === 'WARN')
+                      ? 'border-yakkihou-warn/50 bg-yakkihou-warn/5'
+                      : 'border-input'
+                )}
+              />
+              {matches.length > 0 ? (
+                <div className="flex items-center gap-1 pt-1.5">
+                  {matches.map((m, j) => (
+                    <FindingBadge key={j} finding={m} />
+                  ))}
+                </div>
+              ) : null}
+              <button
+                type="button"
+                onClick={() => removeAt(i)}
+                title="삭제"
+                className="rounded-md border border-input bg-background p-2 text-muted-foreground hover:bg-accent"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+            {matches.length > 0 ? <FindingDetail findings={matches} /> : null}
+          </div>
+        );
+      })}
+      <button
+        type="button"
+        onClick={addRow}
+        className="text-xs text-primary hover:underline"
+      >
+        + 줄 추가
+      </button>
+    </div>
   );
 }

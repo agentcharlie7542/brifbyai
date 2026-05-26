@@ -121,7 +121,20 @@ export async function POST(req: Request) {
 
     // 약기법 검증 — sentenceHints 가 아닌 실제 본문 텍스트 기준
     const flatText = flattenSheetText(sheet);
-    let yakkihouSummary: { safe: number; warn: number; ng: number } | null = null;
+    let yakkihouSummary:
+      | {
+          safe: number;
+          warn: number;
+          ng: number;
+          findings?: Array<{
+            text: string;
+            level: 'WARN' | 'NG';
+            rule: string;
+            reason: string;
+            suggestions: string[];
+          }>;
+        }
+      | null = null;
     if (flatText.trim()) {
       try {
         const v = await validate({
@@ -131,7 +144,18 @@ export async function POST(req: Request) {
           // 시트 생성과 검증 합산 60s 안에 끝나야 함 — Layer 3 는 끔
           skipLayer3: true,
         });
-        yakkihouSummary = v.summary;
+        yakkihouSummary = {
+          ...v.summary,
+          findings: v.findings
+            .filter((f) => f.level !== 'SAFE')
+            .map((f) => ({
+              text: f.text,
+              level: f.level as 'WARN' | 'NG',
+              rule: f.rule,
+              reason: f.reason,
+              suggestions: f.suggestions,
+            })),
+        };
       } catch (err) {
         console.warn('[sheets/generate] yakkihou validate skipped:', err);
       }

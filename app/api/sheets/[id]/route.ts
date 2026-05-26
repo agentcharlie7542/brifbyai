@@ -78,12 +78,23 @@ export async function PATCH(
             apiKey,
             skipLayer3: true,
           });
-          yakkihouSummary = v.summary;
+          yakkihouSummary = {
+            ...v.summary,
+            findings: v.findings
+              .filter((f) => f.level !== 'SAFE')
+              .map((f) => ({
+                text: f.text,
+                level: f.level as 'WARN' | 'NG',
+                rule: f.rule,
+                reason: f.reason,
+                suggestions: f.suggestions,
+              })),
+          };
         } catch (err) {
           console.warn('[sheets/PATCH] yakkihou validate skipped:', err);
         }
       } else {
-        yakkihouSummary = { safe: 0, warn: 0, ng: 0 };
+        yakkihouSummary = { safe: 0, warn: 0, ng: 0, findings: [] };
       }
     }
 

@@ -94,6 +94,14 @@ export const sheets = pgTable('sheets', {
     safe: number;
     warn: number;
     ng: number;
+    /** NG/WARN finding 디테일 (본문 옆 인라인 배지용). SAFE 은 제외. */
+    findings?: Array<{
+      text: string;
+      level: 'WARN' | 'NG';
+      rule: string;
+      reason: string;
+      suggestions: string[];
+    }>;
   }>(),
   createdBy: varchar('created_by', { length: 128 }),
   createdAt: timestamp('created_at', { withTimezone: true })
