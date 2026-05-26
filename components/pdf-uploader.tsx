@@ -2,6 +2,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { upload } from '@vercel/blob/client';
 import {
   CheckCircle2,
   FileUp,
@@ -11,7 +12,13 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Status = 'queued' | 'uploading' | 'retrying' | 'done' | 'error';
+type Status =
+  | 'queued'
+  | 'uploading'
+  | 'parsing'
+  | 'retrying'
+  | 'done'
+  | 'error';
 
 interface FileItem {
   file: File;
@@ -45,6 +52,7 @@ export function PdfUploader({
       (i) =>
         i.status === 'queued' ||
         i.status === 'uploading' ||
+        i.status === 'parsing' ||
         i.status === 'retrying'
     ).length;
     return { done, failed, pending, total: items.length };
@@ -84,6 +92,7 @@ export function PdfUploader({
   }
 
   async function uploadOne(index: number) {
+    const file = items[index].file;
     for (let attempt = 1; attempt <= MAX_AUTO_ATTEMPTS; attempt += 1) {
       const isRetry = attempt > 1;
       setItems((prev) =>
@@ -98,22 +107,36 @@ export function PdfUploader({
         )
       );
 
-      const fd = new FormData();
-      fd.append('brandId', brandId);
-      fd.append('file', items[index].file);
-
       try {
-        const res = await fetch('/api/pdf/import', {
-          method: 'POST',
-          body: fd,
+        // 1) PDF 바이트를 Vercel Blob 으로 클라이언트에서 직접 업로드
+        //    (Vercel 함수 4.5MB body 제한을 우회)
+        const blob = await upload(`reference-sheets/${brandId}/${file.name}`, file, {
+          access: 'public',
+          handleUploadUrl: '/api/pdf/upload-token',
+          contentType: 'application/pdf',
+          clientPayload: JSON.stringify({ brandId }),
         });
 
-        // Vercel 함수 크래시/타임아웃은 HTML/text 응답이라 JSON 파싱 전에 분기
+        // 2) Blob URL 만 함수로 보내서 파싱 + Claude 구조화 + DB 저장
+        setItems((prev) =>
+          prev.map((it, i) => (i === index ? { ...it, status: 'parsing' } : it))
+        );
+
+        const res = await fetch('/api/pdf/import', {
+          method: 'POST',
+          headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({
+            brandId,
+            blobUrl: blob.url,
+            fileName: file.name,
+          }),
+        });
+
         const ct = res.headers.get('content-type') ?? '';
         if (!ct.includes('application/json')) {
           throw new Error(
             res.status === 504 || res.status >= 500
-              ? '서버 처리 시간 초과(60s) — 큰 PDF일수록 자주 발생합니다.'
+              ? '서버 처리 시간 초과(60s) — 매우 긴 PDF 입니다.'
               : `예상치 못한 응답 (HTTP ${res.status})`
           );
         }
@@ -135,7 +158,6 @@ export function PdfUploader({
               : it
           )
         );
-        // success: refresh list so the new file appears below
         router.refresh();
         return;
       } catch (err) {
@@ -149,7 +171,6 @@ export function PdfUploader({
           );
           return;
         }
-        // backoff before retry
         await new Promise((r) => setTimeout(r, 2000));
       }
     }
@@ -289,6 +310,7 @@ function StatusIcon({ status }: { status: Status }) {
     case 'queued':
       return <span className="h-4 w-4 rounded-full bg-muted" aria-hidden />;
     case 'uploading':
+    case 'parsing':
     case 'retrying':
       return (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />

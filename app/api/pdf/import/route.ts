@@ -4,13 +4,14 @@ import { z } from 'zod';
 import { parseAndStructurePdf } from '@/lib/pdf-parser';
 import { getBrand } from '@/lib/db/repositories/brands';
 import { createReferenceSheet } from '@/lib/db/repositories/reference-sheets';
-import { uploadPdf } from '@/lib/storage/blob';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 
-const FormSchema = z.object({
+const Body = z.object({
   brandId: z.string().uuid(),
+  blobUrl: z.string().url(),
+  fileName: z.string().min(1).max(256),
 });
 
 export async function POST(req: Request) {
@@ -23,11 +24,11 @@ export async function POST(req: Request) {
       );
     }
 
-    const form = await req.formData();
-    const parsed = FormSchema.safeParse({ brandId: form.get('brandId') });
+    const raw = await req.json();
+    const parsed = Body.safeParse(raw);
     if (!parsed.success) {
       return NextResponse.json(
-        { error: 'brandId 가 누락되었거나 형식이 잘못되었습니다.', details: parsed.error.flatten() },
+        { error: 'invalid body', details: parsed.error.flatten() },
         { status: 400 }
       );
     }
@@ -40,36 +41,26 @@ export async function POST(req: Request) {
       );
     }
 
-    const file = form.get('file');
-    if (!(file instanceof File)) {
+    // PDF 바이트는 함수가 아니라 Vercel Blob 에 직접 업로드되어 있으므로
+    // 여기서는 Blob 에서 받아와 파싱만 한다.
+    const res = await fetch(parsed.data.blobUrl);
+    if (!res.ok) {
       return NextResponse.json(
-        { error: 'file 필드에 PDF 가 없습니다.' },
-        { status: 400 }
+        { error: `Blob 에서 PDF 를 가져오지 못했습니다 (HTTP ${res.status})` },
+        { status: 502 }
       );
     }
-    if (file.type && file.type !== 'application/pdf') {
-      return NextResponse.json(
-        { error: `지원하지 않는 파일 형식: ${file.type}` },
-        { status: 400 }
-      );
-    }
+    const buffer = Buffer.from(await res.arrayBuffer());
 
-    const buffer = Buffer.from(await file.arrayBuffer());
     const { rawText, pages, structured } = await parseAndStructurePdf(
       buffer,
       apiKey
     );
 
-    const uploaded = await uploadPdf({
-      brandId: brand.id,
-      fileName: file.name,
-      bytes: buffer,
-    });
-
     const saved = await createReferenceSheet({
       brandId: brand.id,
-      fileName: file.name,
-      storageUrl: uploaded.url,
+      fileName: parsed.data.fileName,
+      storageUrl: parsed.data.blobUrl,
       parsedText: rawText,
       structured: structured as Record<string, unknown>,
       pages,
