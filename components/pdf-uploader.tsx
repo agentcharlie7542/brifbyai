@@ -1,20 +1,30 @@
 'use client';
 
 import { useCallback, useMemo, useState } from 'react';
-import { CheckCircle2, FileUp, Loader2, XCircle } from 'lucide-react';
+import { useRouter } from 'next/navigation';
+import {
+  CheckCircle2,
+  FileUp,
+  Loader2,
+  RotateCcw,
+  XCircle,
+} from 'lucide-react';
 import { cn } from '@/lib/utils';
 
-type Status = 'queued' | 'uploading' | 'done' | 'error';
+type Status = 'queued' | 'uploading' | 'retrying' | 'done' | 'error';
 
 interface FileItem {
   file: File;
   status: Status;
   message?: string;
+  attempts?: number;
   result?: {
     id: string;
     pages?: number;
   };
 }
+
+const MAX_AUTO_ATTEMPTS = 2;
 
 export function PdfUploader({
   brandId,
@@ -23,6 +33,7 @@ export function PdfUploader({
   brandId: string;
   brandName: string;
 }) {
+  const router = useRouter();
   const [items, setItems] = useState<FileItem[]>([]);
   const [dragging, setDragging] = useState(false);
   const [isUploading, setUploading] = useState(false);
@@ -31,7 +42,10 @@ export function PdfUploader({
     const done = items.filter((i) => i.status === 'done').length;
     const failed = items.filter((i) => i.status === 'error').length;
     const pending = items.filter(
-      (i) => i.status === 'queued' || i.status === 'uploading'
+      (i) =>
+        i.status === 'queued' ||
+        i.status === 'uploading' ||
+        i.status === 'retrying'
     ).length;
     return { done, failed, pending, total: items.length };
   }, [items]);
@@ -56,45 +70,88 @@ export function PdfUploader({
       await uploadOne(i);
     }
     setUploading(false);
+    router.refresh();
+  }
+
+  async function retryOne(index: number) {
+    setItems((prev) =>
+      prev.map((it, i) =>
+        i === index ? { ...it, status: 'queued', message: undefined } : it
+      )
+    );
+    await uploadOne(index);
+    router.refresh();
   }
 
   async function uploadOne(index: number) {
-    setItems((prev) =>
-      prev.map((it, i) => (i === index ? { ...it, status: 'uploading' } : it))
-    );
-    const fd = new FormData();
-    fd.append('brandId', brandId);
-    fd.append('file', items[index].file);
+    for (let attempt = 1; attempt <= MAX_AUTO_ATTEMPTS; attempt += 1) {
+      const isRetry = attempt > 1;
+      setItems((prev) =>
+        prev.map((it, i) =>
+          i === index
+            ? {
+                ...it,
+                status: isRetry ? 'retrying' : 'uploading',
+                attempts: attempt,
+              }
+            : it
+        )
+      );
 
-    try {
-      const res = await fetch('/api/pdf/import', { method: 'POST', body: fd });
-      const json = await res.json();
-      if (!res.ok) {
-        throw new Error(json?.detail || json?.error || `HTTP ${res.status}`);
+      const fd = new FormData();
+      fd.append('brandId', brandId);
+      fd.append('file', items[index].file);
+
+      try {
+        const res = await fetch('/api/pdf/import', {
+          method: 'POST',
+          body: fd,
+        });
+
+        // Vercel 함수 크래시/타임아웃은 HTML/text 응답이라 JSON 파싱 전에 분기
+        const ct = res.headers.get('content-type') ?? '';
+        if (!ct.includes('application/json')) {
+          throw new Error(
+            res.status === 504 || res.status >= 500
+              ? '서버 처리 시간 초과(60s) — 큰 PDF일수록 자주 발생합니다.'
+              : `예상치 못한 응답 (HTTP ${res.status})`
+          );
+        }
+
+        const json = await res.json();
+        if (!res.ok) {
+          throw new Error(json?.detail || json?.error || `HTTP ${res.status}`);
+        }
+
+        setItems((prev) =>
+          prev.map((it, i) =>
+            i === index
+              ? {
+                  ...it,
+                  status: 'done',
+                  result: { id: json.id, pages: json.pages },
+                  message: undefined,
+                }
+              : it
+          )
+        );
+        // success: refresh list so the new file appears below
+        router.refresh();
+        return;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'upload failed';
+        const isLast = attempt === MAX_AUTO_ATTEMPTS;
+        if (isLast) {
+          setItems((prev) =>
+            prev.map((it, i) =>
+              i === index ? { ...it, status: 'error', message } : it
+            )
+          );
+          return;
+        }
+        // backoff before retry
+        await new Promise((r) => setTimeout(r, 2000));
       }
-      setItems((prev) =>
-        prev.map((it, i) =>
-          i === index
-            ? {
-                ...it,
-                status: 'done',
-                result: { id: json.id, pages: json.pages },
-              }
-            : it
-        )
-      );
-    } catch (err) {
-      setItems((prev) =>
-        prev.map((it, i) =>
-          i === index
-            ? {
-                ...it,
-                status: 'error',
-                message: err instanceof Error ? err.message : 'upload failed',
-              }
-            : it
-        )
-      );
     }
   }
 
@@ -141,7 +198,8 @@ export function PdfUploader({
           </label>
         </p>
         <p className="mt-1 text-xs text-muted-foreground">
-          서버 측에서 pdf-parse + Claude 로 자동 구조화됩니다.
+          서버 측에서 pdf-parse + Claude 로 자동 구조화됩니다. 실패 시 자동 1회
+          재시도.
         </p>
       </div>
 
@@ -198,12 +256,24 @@ export function PdfUploader({
                   </span>
                 ) : null}
                 {it.status === 'error' && it.message ? (
-                  <span
-                    className="max-w-xs truncate text-xs text-yakkihou-ng"
-                    title={it.message}
-                  >
-                    {it.message}
-                  </span>
+                  <>
+                    <span
+                      className="max-w-xs truncate text-xs text-yakkihou-ng"
+                      title={it.message}
+                    >
+                      {it.message}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => retryOne(i)}
+                      disabled={isUploading}
+                      className="inline-flex items-center rounded border border-input px-2 py-0.5 text-[10px] hover:bg-accent disabled:opacity-50"
+                      title="다시 시도"
+                    >
+                      <RotateCcw className="mr-1 h-3 w-3" />
+                      재시도
+                    </button>
+                  </>
                 ) : null}
               </li>
             ))}
@@ -219,6 +289,7 @@ function StatusIcon({ status }: { status: Status }) {
     case 'queued':
       return <span className="h-4 w-4 rounded-full bg-muted" aria-hidden />;
     case 'uploading':
+    case 'retrying':
       return (
         <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
       );
