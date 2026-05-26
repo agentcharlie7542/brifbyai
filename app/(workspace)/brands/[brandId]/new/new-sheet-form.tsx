@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
   AlertCircle,
@@ -13,6 +14,23 @@ import {
 } from 'lucide-react';
 import type { Qoo10ProductData } from '@/lib/qoo10/types';
 import { cn } from '@/lib/utils';
+
+const CATEGORIES = [
+  { value: 'cosmetic', label: '화장품' },
+  { value: 'quasi_drug', label: '의약부외품' },
+  { value: 'health_food', label: '건강식품' },
+  { value: 'functional_food', label: '기능성표시식품' },
+  { value: 'general_food', label: '일반식품' },
+  { value: 'medical_device', label: '의료기기' },
+  { value: 'general', label: '일반' },
+] as const;
+
+type CategoryValue = (typeof CATEGORIES)[number]['value'];
+
+type GenState =
+  | { status: 'idle' }
+  | { status: 'loading' }
+  | { status: 'error'; message: string; detail?: string };
 
 type State =
   | { status: 'idle' }
@@ -32,6 +50,7 @@ interface Props {
 }
 
 export function NewSheetForm({ brandId, brandName }: Props) {
+  const router = useRouter();
   const [url, setUrl] = useState('');
   const [state, setState] = useState<State>({ status: 'idle' });
   const [showManual, setShowManual] = useState(false);
@@ -171,14 +190,165 @@ export function NewSheetForm({ brandId, brandName }: Props) {
       ) : null}
 
       {state.status === 'ok' ? (
-        <ProductPreview
-          product={state.product}
-          cached={state.cached}
-          brandId={brandId}
-          onRefresh={() => importUrl({ forceRefresh: true })}
-        />
+        <>
+          <ProductPreview
+            product={state.product}
+            cached={state.cached}
+            onRefresh={() => importUrl({ forceRefresh: true })}
+          />
+          <GenerateSheetSection
+            brandId={brandId}
+            qoo10Url={url.trim()}
+            defaultCampaign={state.product.title.slice(0, 80)}
+            onCreated={(id) => router.push(`/brands/${brandId}/sheets/${id}`)}
+          />
+        </>
       ) : null}
     </div>
+  );
+}
+
+function GenerateSheetSection({
+  brandId,
+  qoo10Url,
+  defaultCampaign,
+  onCreated,
+}: {
+  brandId: string;
+  qoo10Url: string;
+  defaultCampaign: string;
+  onCreated: (sheetId: string) => void;
+}) {
+  const [category, setCategory] = useState<CategoryValue | ''>('');
+  const [campaignName, setCampaignName] = useState(defaultCampaign);
+  const [state, setState] = useState<GenState>({ status: 'idle' });
+
+  async function generate() {
+    if (!category) return;
+    setState({ status: 'loading' });
+    try {
+      const res = await fetch('/api/sheets/generate', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          brandId,
+          qoo10Url,
+          category,
+          campaignName: campaignName.trim() || undefined,
+        }),
+      });
+      const ct = res.headers.get('content-type') ?? '';
+      if (!ct.includes('application/json')) {
+        throw new Error(
+          res.status === 504 || res.status >= 500
+            ? '서버 처리 시간 초과(60s) — 학습 PDF 가 많거나 Claude 가 느린 케이스입니다.'
+            : `예상치 못한 응답 (HTTP ${res.status})`
+        );
+      }
+      const json = await res.json();
+      if (!res.ok) {
+        setState({
+          status: 'error',
+          message: json.error ?? `HTTP ${res.status}`,
+          detail: json.detail,
+        });
+        return;
+      }
+      onCreated(json.id as string);
+    } catch (err) {
+      setState({
+        status: 'error',
+        message: err instanceof Error ? err.message : 'unknown error',
+      });
+    }
+  }
+
+  return (
+    <section className="rounded-lg border bg-card p-5 shadow-sm">
+      <div className="flex items-start justify-between">
+        <div>
+          <h3 className="text-sm font-semibold">시트 초안 생성</h3>
+          <p className="mt-1 text-xs text-muted-foreground">
+            카테고리·캠페인명을 정하면 학습 PDF + 약기법 룰셋과 합쳐 Claude 가 시트 초안을 만듭니다. 보통 10~30초 소요.
+          </p>
+        </div>
+      </div>
+
+      <div className="mt-4 grid gap-3 sm:grid-cols-[200px_1fr]">
+        <div>
+          <label className="text-xs font-medium" htmlFor="sheet-category">
+            제품 카테고리 (약기법 룰셋)
+          </label>
+          <select
+            id="sheet-category"
+            value={category}
+            onChange={(e) => setCategory(e.target.value as CategoryValue | '')}
+            disabled={state.status === 'loading'}
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm"
+          >
+            <option value="">선택…</option>
+            {CATEGORIES.map((c) => (
+              <option key={c.value} value={c.value}>
+                {c.label}
+              </option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-xs font-medium" htmlFor="sheet-campaign">
+            캠페인명
+          </label>
+          <input
+            id="sheet-campaign"
+            value={campaignName}
+            onChange={(e) => setCampaignName(e.target.value)}
+            disabled={state.status === 'loading'}
+            placeholder="예) Pureka 인플루언서 런칭"
+            className="mt-1 w-full rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm"
+          />
+        </div>
+      </div>
+
+      {state.status === 'error' ? (
+        <div className="mt-3 rounded-md border border-yakkihou-ng/30 bg-yakkihou-ng/5 p-3 text-xs">
+          <p className="font-medium text-yakkihou-ng">생성 실패</p>
+          <p className="mt-0.5 text-foreground/80">{state.message}</p>
+          {state.detail ? (
+            <p className="mt-0.5 break-all text-[10px] text-foreground/60">
+              {state.detail}
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
+      <div className="mt-4 flex items-center justify-between">
+        <p className="text-xs text-muted-foreground">
+          {category
+            ? `${CATEGORIES.find((c) => c.value === category)?.label} 룰셋으로 검증합니다.`
+            : '카테고리를 먼저 선택하세요.'}
+        </p>
+        <button
+          type="button"
+          onClick={generate}
+          disabled={!category || state.status === 'loading'}
+          className={cn(
+            'inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow disabled:cursor-not-allowed disabled:opacity-50'
+          )}
+        >
+          {state.status === 'loading' ? (
+            <>
+              <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />
+              생성 중 (Claude 호출)…
+            </>
+          ) : (
+            <>
+              <Sparkles className="mr-1.5 h-4 w-4" />
+              시트 생성
+            </>
+          )}
+        </button>
+      </div>
+    </section>
   );
 }
 
@@ -319,12 +489,10 @@ function ManualPanel({
 function ProductPreview({
   product,
   cached,
-  brandId,
   onRefresh,
 }: {
   product: Qoo10ProductData;
   cached: boolean;
-  brandId: string;
   onRefresh: () => void;
 }) {
   const hero = product.images?.[0];
@@ -419,22 +587,6 @@ function ProductPreview({
         </div>
       </div>
 
-      <div className="flex items-center justify-between border-t bg-muted/30 px-5 py-3">
-        <p className="text-xs text-muted-foreground">
-          다음 단계: 학습 PDF + 약기법 룰셋 결합으로 시트 초안 생성
-        </p>
-        <button
-          type="button"
-          disabled
-          title="다음 단계에서 활성화"
-          className={cn(
-            'inline-flex items-center rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow disabled:cursor-not-allowed disabled:opacity-50'
-          )}
-        >
-          <Sparkles className="mr-1.5 h-4 w-4" />
-          시트 생성 (Phase 4-2)
-        </button>
-      </div>
     </section>
   );
 }
