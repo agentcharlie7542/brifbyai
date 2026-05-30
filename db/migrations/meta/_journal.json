@@ -8,6 +8,20 @@
       "when": 1779436217171,
       "tag": "0000_rare_charles_xavier",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1779969960971,
+      "tag": "0001_fair_butterfly",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1780035124491,
+      "tag": "0002_strong_magneto",
+      "breakpoints": true
     }
   ]
 }

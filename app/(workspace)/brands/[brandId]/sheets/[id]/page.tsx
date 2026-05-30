@@ -3,8 +3,13 @@ import { notFound } from 'next/navigation';
 import { unstable_noStore as noStore } from 'next/cache';
 import { getBrand } from '@/lib/db/repositories/brands';
 import { getSheet } from '@/lib/db/repositories/sheets';
+import {
+  listInfluencersByBrand,
+  listProposalsBySheet,
+} from '@/lib/db/repositories/influencers';
 import type { StructuredOrientSheet } from '@/lib/pdf-parser';
 import { SheetView } from './sheet-view';
+import { SheetProposals } from './sheet-proposals';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -21,6 +26,11 @@ export default async function SheetDetailPage({
     getSheet(params.id),
   ]);
   if (!brand || !sheet || sheet.brandId !== brand.id) notFound();
+
+  const [influencers, proposals] = await Promise.all([
+    listInfluencersByBrand(brand.id),
+    listProposalsBySheet(sheet.id),
+  ]);
 
   return (
     <main className="px-10 py-10">
@@ -43,6 +53,27 @@ export default async function SheetDetailPage({
             content: (sheet.content ?? {}) as StructuredOrientSheet,
             yakkihouSummary: sheet.yakkihouSummary,
           }}
+        />
+
+        <SheetProposals
+          brandId={brand.id}
+          sheetId={sheet.id}
+          influencers={influencers.map((i) => ({
+            id: i.id,
+            handle: i.handle,
+            displayName: i.displayName,
+            platform: i.platform,
+            hasPersona: Boolean(i.persona),
+          }))}
+          proposals={proposals.map((p) => ({
+            id: p.id,
+            influencerName: p.influencerName,
+            influencerHandle: p.influencerHandle,
+            influencerPlatform: p.influencerPlatform,
+            status: p.status,
+            yakkihouSummary: p.yakkihouSummary,
+            updatedAt: p.updatedAt.toISOString(),
+          }))}
         />
       </div>
     </main>

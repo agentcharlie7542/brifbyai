@@ -12,6 +12,8 @@ import type { Qoo10ProductData } from '@/lib/qoo10/types';
 import { generateSheet, flattenSheetText } from '@/lib/sheet/generator';
 import { validate } from '@/lib/yakkihou/validator';
 import type { ProductCategory } from '@/lib/yakkihou/types';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { logAction, requestMeta } from '@/lib/audit/log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -178,6 +180,8 @@ export async function POST(req: Request) {
       return 'jp';
     })();
 
+    const currentUser = await getCurrentUser();
+
     const saved = await createSheet({
       brandId: brand.id,
       campaignName,
@@ -185,6 +189,26 @@ export async function POST(req: Request) {
       category: parsed.data.category as ProductCategory,
       content: sheet as Record<string, unknown>,
       yakkihouSummary,
+      createdById: currentUser?.userId ?? null,
+      updatedById: currentUser?.userId ?? null,
+    });
+
+    const { ip, userAgent } = requestMeta(req);
+    await logAction({
+      userId: currentUser?.userId ?? null,
+      action: 'generate_sheet',
+      entityType: 'sheet',
+      entityId: saved.id,
+      brandId: brand.id,
+      metadata: {
+        campaignName,
+        category: parsed.data.category,
+        yakkihou: yakkihouSummary
+          ? { safe: yakkihouSummary.safe, warn: yakkihouSummary.warn, ng: yakkihouSummary.ng }
+          : null,
+      },
+      ip,
+      userAgent,
     });
 
     return NextResponse.json({

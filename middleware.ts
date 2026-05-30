@@ -1,26 +1,23 @@
 import { NextResponse, type NextRequest } from 'next/server';
-import { AUTH_COOKIE, verifyPasswordToken } from '@/lib/auth';
+import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/session';
 
+// 로그인 페이지(및 그 서버 액션 POST)는 게이트 밖.
 const PUBLIC_PATHS = ['/login'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
-  if (PUBLIC_PATHS.some((p) => pathname.startsWith(p))) {
+  if (PUBLIC_PATHS.some((p) => pathname === p || pathname.startsWith(`${p}/`))) {
     return NextResponse.next();
   }
 
-  const password = process.env.LOGIN_PASSWORD;
-  // If the gate is not configured, let traffic through (local dev convenience).
-  if (!password) {
+  const token = req.cookies.get(SESSION_COOKIE)?.value;
+  const session = await verifySessionToken(token);
+  if (session) {
     return NextResponse.next();
   }
 
-  const token = req.cookies.get(AUTH_COOKIE)?.value;
-  if (await verifyPasswordToken(token, password)) {
-    return NextResponse.next();
-  }
-
+  // 미인증 → 로그인으로
   const loginUrl = req.nextUrl.clone();
   loginUrl.pathname = '/login';
   loginUrl.search = '';
@@ -28,6 +25,8 @@ export async function middleware(req: NextRequest) {
 }
 
 export const config = {
-  // Skip Next internals, static files, and the favicon. Everything else is gated.
-  matcher: ['/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)).*)'],
+  // Next 내부 자원·정적 파일·favicon 제외, 나머지 전부 게이트.
+  matcher: [
+    '/((?!_next/static|_next/image|favicon.ico|.*\\.(?:png|jpg|jpeg|svg|gif|webp|ico)).*)',
+  ],
 };

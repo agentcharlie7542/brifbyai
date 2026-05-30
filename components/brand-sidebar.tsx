@@ -7,18 +7,29 @@ import {
   FileText,
   LayoutDashboard,
   Library,
+  ListChecks,
+  LogOut,
   Plus,
   Settings,
   ShieldCheck,
   Sparkles,
+  Users,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import type { Brand } from '@/db/schema';
 
+interface SidebarUser {
+  email: string;
+  name?: string;
+  role: 'admin' | 'editor' | 'viewer';
+}
+
 export function BrandSidebar({
   brands,
+  user,
 }: {
   brands: Pick<Brand, 'id' | 'name' | 'nameJa'>[];
+  user?: SidebarUser | null;
 }) {
   const pathname = usePathname();
   const match = pathname.match(/^\/brands\/([^\/]+)/);
@@ -119,6 +130,15 @@ export function BrandSidebar({
                           시트 목록
                         </SidebarSubLink>
                         <SidebarSubLink
+                          href={`/brands/${brand.id}/influencers`}
+                          icon={<Users className="h-3.5 w-3.5" />}
+                          active={pathname.startsWith(
+                            `/brands/${brand.id}/influencers`
+                          )}
+                        >
+                          인플루언서
+                        </SidebarSubLink>
+                        <SidebarSubLink
                           href={`/brands/${brand.id}/library`}
                           icon={<Library className="h-3.5 w-3.5" />}
                           active={pathname.startsWith(
@@ -153,6 +173,15 @@ export function BrandSidebar({
           >
             약기법 플레이그라운드
           </SidebarLink>
+          {user?.role === 'admin' ? (
+            <SidebarLink
+              href="/admin/audit"
+              icon={<ListChecks className="h-4 w-4" />}
+              active={pathname.startsWith('/admin/audit')}
+            >
+              감사 로그
+            </SidebarLink>
+          ) : null}
         </SidebarSection>
       </nav>
 
@@ -163,6 +192,26 @@ export function BrandSidebar({
           {activeBrand.nameJa ? (
             <p className="text-muted-foreground">{activeBrand.nameJa}</p>
           ) : null}
+        </div>
+      ) : null}
+
+      {user ? (
+        <div className="border-t px-4 py-3">
+          <p className="truncate text-xs font-medium">
+            {user.name || user.email}
+          </p>
+          <p className="truncate text-[10px] text-muted-foreground">
+            {user.email} · {user.role}
+          </p>
+          <form action="/api/auth/logout" method="post" className="mt-2">
+            <button
+              type="submit"
+              className="inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 py-1.5 text-xs text-muted-foreground shadow-sm transition-colors hover:bg-accent hover:text-foreground"
+            >
+              <LogOut className="h-3 w-3" />
+              로그아웃
+            </button>
+          </form>
         </div>
       ) : null}
     </aside>

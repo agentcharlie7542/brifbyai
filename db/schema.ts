@@ -8,6 +8,7 @@ import {
   jsonb,
   timestamp,
   uuid,
+  boolean,
 } from 'drizzle-orm/pg-core';
 
 export const productCategoryEnum = pgEnum('product_category', [
@@ -26,6 +27,14 @@ export const yakkihouLevelEnum = pgEnum('yakkihou_level', [
   'SAFE',
   'WARN',
   'NG',
+]);
+
+export const userRoleEnum = pgEnum('user_role', ['admin', 'editor', 'viewer']);
+
+export const socialPlatformEnum = pgEnum('social_platform', [
+  'youtube',
+  'instagram',
+  'tiktok',
 ]);
 
 export const brands = pgTable('brands', {
@@ -73,6 +82,9 @@ export const referenceSheets = pgTable('reference_sheets', {
   parsedText: text('parsed_text'),
   structured: jsonb('structured').$type<Record<string, unknown>>(),
   pages: integer('pages'),
+  uploadedById: uuid('uploaded_by_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
   uploadedAt: timestamp('uploaded_at', { withTimezone: true })
     .notNull()
     .default(sql`now()`),
@@ -104,6 +116,12 @@ export const sheets = pgTable('sheets', {
     }>;
   }>(),
   createdBy: varchar('created_by', { length: 128 }),
+  createdById: uuid('created_by_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  updatedById: uuid('updated_by_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
   createdAt: timestamp('created_at', { withTimezone: true })
     .notNull()
     .default(sql`now()`),
@@ -128,6 +146,105 @@ export const yakkihouFindings = pgTable('yakkihou_findings', {
   category: productCategoryEnum('category').notNull(),
   resolvedAt: timestamp('resolved_at', { withTimezone: true }),
 });
+
+export const users = pgTable('users', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  email: varchar('email', { length: 256 }).notNull().unique(),
+  name: varchar('name', { length: 128 }),
+  role: userRoleEnum('role').notNull().default('editor'),
+  /** scrypt 해시 (salt:hash hex). 외부 IdP 연동 시 null 가능. */
+  passwordHash: text('password_hash'),
+  isActive: boolean('is_active').notNull().default(true),
+  lastLoginAt: timestamp('last_login_at', { withTimezone: true }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const auditLogs = pgTable('audit_logs', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  userId: uuid('user_id').references(() => users.id, { onDelete: 'set null' }),
+  /** 행동 유형: login, logout, upload_pdf, create_sheet, update_sheet, delete_sheet, generate_sheet, qoo10_import 등 */
+  action: varchar('action', { length: 64 }).notNull(),
+  /** 대상 종류: sheet, reference_sheet, brand, user 등 (옵션) */
+  entityType: varchar('entity_type', { length: 64 }),
+  entityId: uuid('entity_id'),
+  brandId: uuid('brand_id'),
+  metadata: jsonb('metadata').$type<Record<string, unknown>>(),
+  ip: varchar('ip', { length: 64 }),
+  userAgent: text('user_agent'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const influencers = pgTable('influencers', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  brandId: uuid('brand_id')
+    .notNull()
+    .references(() => brands.id, { onDelete: 'cascade' }),
+  platform: socialPlatformEnum('platform').notNull(),
+  handle: varchar('handle', { length: 128 }).notNull(),
+  displayName: varchar('display_name', { length: 256 }),
+  url: text('url'),
+  followerCount: integer('follower_count'),
+  /** 원본/수집 데이터: bio, 최근 게시물(캡션·태그·지표) 등 */
+  profile: jsonb('profile').$type<Record<string, unknown>>(),
+  /** Claude 가 추출한 페르소나: tone, topics[], audience, strengths, summary */
+  persona: jsonb('persona').$type<Record<string, unknown>>(),
+  createdById: uuid('created_by_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const influencerProposals = pgTable('influencer_proposals', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  sheetId: uuid('sheet_id')
+    .notNull()
+    .references(() => sheets.id, { onDelete: 'cascade' }),
+  influencerId: uuid('influencer_id')
+    .notNull()
+    .references(() => influencers.id, { onDelete: 'cascade' }),
+  /** 인플루언서 보이스로 재구성한 제안 (StructuredOrientSheet 확장 형태) */
+  content: jsonb('content').$type<Record<string, unknown>>().notNull(),
+  yakkihouSummary: jsonb('yakkihou_summary').$type<{
+    safe: number;
+    warn: number;
+    ng: number;
+    findings?: Array<{
+      text: string;
+      level: 'WARN' | 'NG';
+      rule: string;
+      reason: string;
+      suggestions: string[];
+    }>;
+  }>(),
+  status: varchar('status', { length: 32 }).notNull().default('draft'),
+  createdById: uuid('created_by_id').references(() => users.id, {
+    onDelete: 'set null',
+  }),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+  updatedAt: timestamp('updated_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
+export type User = typeof users.$inferSelect;
+export type NewUser = typeof users.$inferInsert;
+export type AuditLog = typeof auditLogs.$inferSelect;
+export type NewAuditLog = typeof auditLogs.$inferInsert;
+export type Influencer = typeof influencers.$inferSelect;
+export type NewInfluencer = typeof influencers.$inferInsert;
+export type InfluencerProposal = typeof influencerProposals.$inferSelect;
+export type NewInfluencerProposal = typeof influencerProposals.$inferInsert;
 
 export type Brand = typeof brands.$inferSelect;
 export type NewBrand = typeof brands.$inferInsert;

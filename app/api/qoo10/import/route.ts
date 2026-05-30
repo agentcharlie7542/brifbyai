@@ -5,6 +5,8 @@ import { fetchProductHtml, Qoo10FetchError } from '@/lib/qoo10/fetcher';
 import { parseQoo10Html } from '@/lib/qoo10/parser';
 import { getCached, saveCached } from '@/lib/qoo10/cache';
 import type { Qoo10ProductData } from '@/lib/qoo10/types';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { logAction, requestMeta } from '@/lib/audit/log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 45;
@@ -88,6 +90,15 @@ export async function POST(req: Request) {
         );
       }
       await saveCached(product);
+      const currentUser = await getCurrentUser();
+      const { ip, userAgent } = requestMeta(req);
+      await logAction({
+        userId: currentUser?.userId ?? null,
+        action: 'qoo10_import',
+        metadata: { productId: product.productId, title: product.title },
+        ip,
+        userAgent,
+      });
       return NextResponse.json({ product, cached: false });
     } catch (err) {
       if (err instanceof Qoo10FetchError) {

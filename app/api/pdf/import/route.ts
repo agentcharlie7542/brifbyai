@@ -4,6 +4,8 @@ import { z } from 'zod';
 import { parseAndStructurePdf } from '@/lib/pdf-parser';
 import { getBrand } from '@/lib/db/repositories/brands';
 import { createReferenceSheet } from '@/lib/db/repositories/reference-sheets';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { logAction, requestMeta } from '@/lib/audit/log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -57,6 +59,8 @@ export async function POST(req: Request) {
       apiKey
     );
 
+    const currentUser = await getCurrentUser();
+
     const saved = await createReferenceSheet({
       brandId: brand.id,
       fileName: parsed.data.fileName,
@@ -64,6 +68,19 @@ export async function POST(req: Request) {
       parsedText: rawText,
       structured: structured as Record<string, unknown>,
       pages,
+      uploadedById: currentUser?.userId ?? null,
+    });
+
+    const { ip, userAgent } = requestMeta(req);
+    await logAction({
+      userId: currentUser?.userId ?? null,
+      action: 'upload_pdf',
+      entityType: 'reference_sheet',
+      entityId: saved.id,
+      brandId: brand.id,
+      metadata: { fileName: saved.fileName, pages: saved.pages },
+      ip,
+      userAgent,
     });
 
     return NextResponse.json({

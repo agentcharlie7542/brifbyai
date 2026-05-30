@@ -6,6 +6,8 @@ import { validate } from '@/lib/yakkihou/validator';
 import { flattenSheetText } from '@/lib/sheet/generator';
 import type { StructuredOrientSheet } from '@/lib/pdf-parser';
 import type { ProductCategory } from '@/lib/yakkihou/types';
+import { getCurrentUser } from '@/lib/auth/current-user';
+import { logAction, requestMeta } from '@/lib/audit/log';
 
 export const runtime = 'nodejs';
 export const maxDuration = 60;
@@ -98,16 +100,34 @@ export async function PATCH(
       }
     }
 
+    const currentUser = await getCurrentUser();
+
     const updated = await updateSheet(params.id, {
       content: nextContent as Record<string, unknown>,
       campaignName: parsed.data.campaignName ?? existing.campaignName,
       category: nextCategory,
       yakkihouSummary,
+      updatedById: currentUser?.userId ?? null,
     });
 
     if (!updated) {
       return NextResponse.json({ error: 'update failed' }, { status: 500 });
     }
+
+    const { ip, userAgent } = requestMeta(req);
+    await logAction({
+      userId: currentUser?.userId ?? null,
+      action: 'update_sheet',
+      entityType: 'sheet',
+      entityId: updated.id,
+      brandId: existing.brandId,
+      metadata: {
+        revalidated: Boolean(contentChanged || categoryChanged),
+        category: nextCategory,
+      },
+      ip,
+      userAgent,
+    });
 
     return NextResponse.json({
       id: updated.id,
