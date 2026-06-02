@@ -34,6 +34,16 @@ export async function getCached(
   }
 }
 
+export async function deleteCached(productId: string): Promise<void> {
+  try {
+    await fs.unlink(path.join(DIR, `${productId}.json`));
+  } catch (err) {
+    const code = (err as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') return;
+    console.warn('[qoo10 cache] delete failed:', (err as Error).message);
+  }
+}
+
 export async function saveCached(data: Qoo10ProductData): Promise<void> {
   try {
     await ensureDir();

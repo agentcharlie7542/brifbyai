@@ -1,7 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverComponentsExternalPackages: ['pdf-parse'],
+    serverComponentsExternalPackages: [
+      'pdf-parse',
+      'playwright-core',
+      '@sparticuz/chromium',
+    ],
   },
   images: {
     remotePatterns: [
