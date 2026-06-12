@@ -71,7 +71,16 @@ function isServerless(): boolean {
 
 async function launchBrowser() {
   const { chromium } = await import('playwright-core');
-  const extraArgs = ['--disable-blink-features=AutomationControlled'];
+  // 추가 stealth 플래그: webdriver flag 숨김 + 자동화 흔적 제거.
+  // 올리브영의 WAF 는 navigator.webdriver / chromium 자동화 시그니처를 보고 페이지를 즉시 종료한다.
+  const extraArgs = [
+    '--disable-blink-features=AutomationControlled',
+    '--disable-features=IsolateOrigins,site-per-process,SitePerProcess',
+    '--no-first-run',
+    '--no-default-browser-check',
+    '--disable-dev-shm-usage',
+    '--disable-infobars',
+  ];
 
   const explicitPath = process.env.PLAYWRIGHT_CHROMIUM_PATH;
   if (explicitPath) {
@@ -99,7 +108,108 @@ async function launchBrowser() {
   });
 }
 
-const WALL_WAIT_MS = 25_000;
+const WALL_WAIT_MS = 20_000;
+
+/**
+ * 안전한 page.content() — 페이지가 이미 닫혔거나 컨텍스트가 destroy 됐으면 null 반환.
+ * Playwright 가 `Target page, context or browser has been closed` 로 throw 하는 경우 다수.
+ */
+async function safeContent(page: import('playwright-core').Page): Promise<string | null> {
+  try {
+    return await page.content();
+  } catch {
+    return null;
+  }
+}
+
+async function safeUrl(page: import('playwright-core').Page): Promise<string | null> {
+  try {
+    return page.url();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Tier 2 단일 시도. URL/UA 를 바꿔가며 호출하기 위해 분리.
+ */
+async function tier2Attempt(
+  browser: Awaited<ReturnType<typeof launchBrowser>>,
+  url: string,
+  userAgent: string,
+  viewport: { width: number; height: number }
+): Promise<{ html: string; finalUrl: string }> {
+  const context = await browser.newContext({
+    locale: 'ko-KR',
+    timezoneId: 'Asia/Seoul',
+    userAgent,
+    viewport,
+    extraHTTPHeaders: {
+      'accept-language': 'ko-KR,ko;q=0.9,en;q=0.5',
+    },
+  });
+
+  // 자동화 시그니처 제거 — webdriver, chrome.runtime, permissions.query 등.
+  await context.addInitScript(() => {
+    Object.defineProperty(navigator, 'webdriver', { get: () => false });
+    Object.defineProperty(navigator, 'languages', {
+      get: () => ['ko-KR', 'ko', 'en'],
+    });
+    Object.defineProperty(navigator, 'plugins', {
+      get: () => [1, 2, 3, 4, 5],
+    });
+    // @ts-expect-error chrome 객체 모킹 (헤드리스에서는 없음)
+    window.chrome = { runtime: {} };
+  });
+
+  const page = await context.newPage();
+  try {
+    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
+
+    // 1) 봇 차단(잠시만 기다려) 인지 → 상품 마커 등장까지 대기
+    //    waitForSelector 는 navigation 도중에도 안전 (waitForFunction 은 page 닫히면 throw)
+    try {
+      await page.waitForSelector(
+        'meta[property="og:title"], meta[property="og:image"], .prd_name, .goods_name, #goodsInfo',
+        { timeout: WALL_WAIT_MS, state: 'attached' }
+      );
+    } catch {
+      // 마커 못 봄 → 여전히 wall 이거나 페이지가 닫혔거나
+      const stillWallHtml = await safeContent(page);
+      if (!stillWallHtml) {
+        throw new OliveYoungFetchError(
+          '봇 검출로 페이지/컨텍스트가 닫힘',
+          { kind: 'wall', tier: 'tier2' }
+        );
+      }
+      if (isWallPage(stillWallHtml)) {
+        throw new OliveYoungFetchError(
+          `올리브영 봇 차단 페이지를 ${WALL_WAIT_MS / 1000}s 안에 통과하지 못함 (Tier 2)`,
+          { kind: 'wall', tier: 'tier2' }
+        );
+      }
+      // 마커는 없지만 wall 도 아닌 경우 — 그대로 진행해 본다
+    }
+
+    const finalUrl = (await safeUrl(page)) ?? url;
+    const html = await safeContent(page);
+    if (!html) {
+      throw new OliveYoungFetchError(
+        '봇 검출로 페이지/컨텍스트가 닫힘 (content 읽기 전)',
+        { kind: 'wall', tier: 'tier2' }
+      );
+    }
+    if (isWallPage(html)) {
+      throw new OliveYoungFetchError('여전히 봇 차단 페이지 상태 (Tier 2)', {
+        kind: 'wall',
+        tier: 'tier2',
+      });
+    }
+    return { html, finalUrl };
+  } finally {
+    await context.close().catch(() => {});
+  }
+}
 
 export async function fetchProductTier2(url: string): Promise<{
   html: string;
@@ -117,54 +227,51 @@ export async function fetchProductTier2(url: string): Promise<{
   }
 
   try {
-    const context = await browser.newContext({
-      locale: 'ko-KR',
-      timezoneId: 'Asia/Seoul',
-      userAgent: TIER2_UA,
-      viewport: { width: 1280, height: 900 },
-    });
-    const page = await context.newPage();
-    await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 30_000 });
-
-    // 봇 차단 페이지면 자동 리다이렉트(자체 JS) 까지 대기
-    let html = await page.content();
-    if (isWallPage(html)) {
+    // 1차: PC UA + PC URL
+    try {
+      const r = await tier2Attempt(browser, url, TIER2_UA, {
+        width: 1280,
+        height: 900,
+      });
+      return { ...r, tier: 'tier2' };
+    } catch (e1) {
+      if (!(e1 instanceof OliveYoungFetchError) || e1.kind !== 'wall') {
+        throw e1;
+      }
+      // 2차: 모바일 UA + 모바일 도메인 (봇 검출 강도가 더 약한 경향)
+      const mobileUrl = url.replace(
+        /^https?:\/\/(?:www\.)?oliveyoung\.co\.kr\/store\/goods\/getGoodsDetail\.do/,
+        'https://m.oliveyoung.co.kr/m/mtn/goodsDetail.do'
+      );
+      const mobileUa =
+        'Mozilla/5.0 (iPhone; CPU iPhone OS 17_4 like Mac OS X) AppleWebKit/605.1.15 ' +
+        '(KHTML, like Gecko) Version/17.4 Mobile/15E148 Safari/604.1';
       try {
-        await page.waitForFunction(
-          () =>
-            !/잠시만\s*기다려/.test(document.title) &&
-            !!document.querySelector(
-              'meta[property="og:title"], .prd_name, .goods_name'
-            ),
-          undefined,
-          { timeout: WALL_WAIT_MS }
-        );
-      } catch {
+        const r = await tier2Attempt(browser, mobileUrl, mobileUa, {
+          width: 390,
+          height: 844,
+        });
+        return { ...r, tier: 'tier2' };
+      } catch (e2) {
+        if (e2 instanceof OliveYoungFetchError) throw e2;
         throw new OliveYoungFetchError(
-          `올리브영 봇 차단 페이지를 ${WALL_WAIT_MS / 1000}s 안에 통과하지 못함 (Tier 2)`,
+          `Tier 2(모바일) 도 실패: ${(e2 as Error).message}`,
           { kind: 'wall', tier: 'tier2' }
         );
       }
     }
-    // 상품 상세에서 가격/이미지가 비동기 렌더되는 케이스 대응
-    await page
-      .waitForSelector('meta[property="og:title"]', { timeout: 5_000 })
-      .catch(() => {});
-
-    const finalUrl = page.url();
-    html = await page.content();
-    if (isWallPage(html)) {
-      throw new OliveYoungFetchError('여전히 봇 차단 페이지 상태 (Tier 2)', {
-        kind: 'wall',
-        tier: 'tier2',
-      });
-    }
-    return { html, finalUrl, tier: 'tier2' };
   } catch (err) {
     if (err instanceof OliveYoungFetchError) throw err;
+    // Playwright 의 raw 메시지 (Target page... closed 등) 를 사용자 친화적으로 번역
+    const raw = (err as Error).message || '';
+    const isClosed = /Target page.*closed|context.*closed|browser.*closed/i.test(
+      raw
+    );
     throw new OliveYoungFetchError(
-      `Tier 2 fetch 실패: ${(err as Error).message}`,
-      { kind: 'http', tier: 'tier2' }
+      isClosed
+        ? '올리브영 봇 검출로 페이지가 닫혔습니다. 잠시 후 다시 시도하거나 수동 입력 폴백을 사용하세요.'
+        : `Tier 2 fetch 실패: ${raw}`,
+      { kind: 'wall', tier: 'tier2' }
     );
   } finally {
     await browser.close().catch(() => {});
