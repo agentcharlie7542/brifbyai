@@ -14,6 +14,16 @@ import {
 } from 'lucide-react';
 import type { Qoo10ProductData, ProductSource } from '@/lib/qoo10/types';
 import { cn } from '@/lib/utils';
+import { RAW_SNIPPET, BOOKMARKLET_URL } from '@/lib/oliveyoung/snippet';
+
+interface ManualForm {
+  title: string;
+  price?: number;
+  description?: string;
+  category?: string;
+  brand?: string;
+  imageUrl?: string;
+}
 
 /**
  * URL 호스트만 보고 Qoo10 / 올리브영을 자동 분기.
@@ -132,12 +142,7 @@ export function NewSheetForm({ brandId, brandName }: Props) {
     }
   }
 
-  async function submitManual(form: {
-    title: string;
-    price?: number;
-    description?: string;
-    category?: string;
-  }) {
+  async function submitManual(form: ManualForm) {
     const trimmed = url.trim();
     if (!trimmed) return;
     const source = detectSource(trimmed);
@@ -244,6 +249,7 @@ export function NewSheetForm({ brandId, brandName }: Props) {
 
       {showManual ? (
         <ManualPanel
+          source={detected}
           onCancel={() => setShowManual(false)}
           onSubmit={submitManual}
         />
@@ -462,40 +468,171 @@ function ErrorPanel({
 }
 
 function ManualPanel({
+  source,
   onCancel,
   onSubmit,
 }: {
+  source: ProductSource | null;
   onCancel: () => void;
-  onSubmit: (form: {
-    title: string;
-    price?: number;
-    description?: string;
-    category?: string;
-  }) => void;
+  onSubmit: (form: ManualForm) => void;
 }) {
   const [title, setTitle] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
+  const [brand, setBrand] = useState('');
+  const [imageUrl, setImageUrl] = useState('');
+  const [pasteJson, setPasteJson] = useState('');
+  const [pasteError, setPasteError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
+
+  const isOliveYoung = source === 'oliveyoung';
+  const priceLabel = isOliveYoung ? '가격 (KRW)' : '가격 (JPY)';
+
+  /** 북마클릿/콘솔 스니펫 결과 JSON 을 폼 필드로 펼친다. */
+  function applyJson(raw: string) {
+    setPasteError(null);
+    const trimmed = raw.trim();
+    if (!trimmed) return;
+    let parsed: Record<string, unknown>;
+    try {
+      parsed = JSON.parse(trimmed);
+    } catch {
+      setPasteError('JSON 파싱 실패 — 스니펫 출력이 맞는지 확인하세요.');
+      return;
+    }
+    const get = (k: string): string | undefined => {
+      const v = parsed[k];
+      return typeof v === 'string' ? v : undefined;
+    };
+    const num = (k: string): string => {
+      const v = parsed[k];
+      return typeof v === 'number' ? String(v) : '';
+    };
+    if (get('title')) setTitle(get('title') as string);
+    if (get('brand')) setBrand(get('brand') as string);
+    if (get('description')) setDescription(get('description') as string);
+    if (get('category')) setCategory(get('category') as string);
+    if (get('imageUrl')) setImageUrl(get('imageUrl') as string);
+    const priceStr = num('price');
+    if (priceStr) setPrice(priceStr);
+  }
+
+  async function copySnippet() {
+    try {
+      await navigator.clipboard.writeText(RAW_SNIPPET);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      setCopied(false);
+    }
+  }
 
   return (
     <form
       className="rounded-md border bg-muted/30 p-4 text-sm"
       onSubmit={(e) => {
         e.preventDefault();
-        const priceNum = price.trim() ? Number(price.replace(/[^\d.]/g, '')) : undefined;
+        const priceNum = price.trim()
+          ? Number(price.replace(/[^\d.]/g, ''))
+          : undefined;
         onSubmit({
           title: title.trim(),
           price: Number.isFinite(priceNum) ? priceNum : undefined,
           description: description.trim() || undefined,
           category: category.trim() || undefined,
+          brand: brand.trim() || undefined,
+          imageUrl: imageUrl.trim() || undefined,
         });
       }}
     >
       <p className="font-medium">수동 입력 폴백 (Tier 3)</p>
       <p className="mt-1 text-xs text-muted-foreground">
-        Qoo10 페이지를 직접 보고 필요한 정보만 입력하세요. 시트 생성 단계에서 Claude가 학습 PDF로 빈 곳을 보강합니다.
+        {isOliveYoung
+          ? '올리브영은 Vercel IP 를 WAF 가 차단합니다. 아래 두 가지 중 하나로 진행하세요.'
+          : 'Qoo10 페이지를 직접 보고 필요한 정보만 입력하세요.'}{' '}
+        시트 생성 단계에서 Claude 가 학습 PDF 로 빈 곳을 보강합니다.
       </p>
+
+      {isOliveYoung ? (
+        <div className="mt-4 rounded-md border border-dashed bg-background p-3 text-xs">
+          <p className="font-medium text-foreground">
+            방법 1 · 북마클릿/콘솔 스니펫으로 자동 채우기 (권장)
+          </p>
+          <ol className="mt-1.5 list-decimal space-y-0.5 pl-4 text-foreground/80">
+            <li>
+              올리브영 상품 페이지를 본인 브라우저에서 열어 둔 상태로 유지
+            </li>
+            <li>
+              아래 코드를 복사 → DevTools 콘솔에 붙여넣고 실행{' '}
+              <span className="text-muted-foreground">
+                (또는 북마클릿 링크를 즐겨찾기에 드래그 후 한 번 클릭)
+              </span>
+            </li>
+            <li>상품 데이터 JSON 이 클립보드에 복사됨</li>
+            <li>아래 ⬇ 텍스트 영역에 붙여넣으면 폼이 자동 채워집니다</li>
+          </ol>
+
+          <div className="mt-2 flex items-center gap-2">
+            <a
+              href={BOOKMARKLET_URL}
+              onClick={(e) => e.preventDefault()}
+              draggable
+              className="inline-flex items-center rounded border border-input bg-muted px-2 py-1 text-[11px] font-medium hover:bg-accent"
+              title="이 링크를 브라우저 즐겨찾기 바에 드래그하세요"
+            >
+              📎 brifbyai · 올리브영 추출
+            </a>
+            <span className="text-[10px] text-muted-foreground">
+              ← 즐겨찾기로 드래그하세요 (북마클릿)
+            </span>
+          </div>
+
+          <div className="mt-2 rounded bg-muted/60 p-2">
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">
+                콘솔 스니펫
+              </span>
+              <button
+                type="button"
+                onClick={copySnippet}
+                className="rounded border border-input bg-background px-2 py-0.5 text-[10px] hover:bg-accent"
+              >
+                {copied ? '복사됨 ✓' : '코드 복사'}
+              </button>
+            </div>
+            <pre className="mt-1 max-h-32 overflow-auto whitespace-pre-wrap break-all text-[10px] leading-snug text-foreground/80">
+              {RAW_SNIPPET}
+            </pre>
+          </div>
+
+          <label className="mt-3 block">
+            <span className="text-[11px] font-medium">
+              ⬇ 여기에 스니펫 결과 JSON 붙여넣기 (자동 채움)
+            </span>
+            <textarea
+              value={pasteJson}
+              onChange={(e) => {
+                setPasteJson(e.target.value);
+                applyJson(e.target.value);
+              }}
+              placeholder={'{\n  "title": "...",\n  "price": 12000,\n  ...\n}'}
+              rows={4}
+              className="mt-1 w-full rounded-md border border-input bg-background px-3 py-1.5 font-mono text-[11px]"
+            />
+            {pasteError ? (
+              <span className="mt-1 block text-[10px] text-yakkihou-ng">
+                {pasteError}
+              </span>
+            ) : null}
+          </label>
+
+          <p className="mt-3 border-t pt-2 text-foreground">
+            방법 2 · 직접 입력
+          </p>
+        </div>
+      ) : null}
+
       <div className="mt-3 space-y-2">
         <input
           required
@@ -508,7 +645,7 @@ function ManualPanel({
           <input
             value={price}
             onChange={(e) => setPrice(e.target.value)}
-            placeholder="가격 (JPY)"
+            placeholder={priceLabel}
             className="w-1/2 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           />
           <input
@@ -518,6 +655,22 @@ function ManualPanel({
             className="w-1/2 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
           />
         </div>
+        {isOliveYoung ? (
+          <div className="flex gap-2">
+            <input
+              value={brand}
+              onChange={(e) => setBrand(e.target.value)}
+              placeholder="브랜드"
+              className="w-1/2 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            />
+            <input
+              value={imageUrl}
+              onChange={(e) => setImageUrl(e.target.value)}
+              placeholder="대표 이미지 URL"
+              className="w-1/2 rounded-md border border-input bg-background px-3 py-1.5 text-sm"
+            />
+          </div>
+        ) : null}
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}

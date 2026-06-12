@@ -21,7 +21,8 @@ const Body = z.object({
   url: z.string().min(1),
   /** true 면 캐시 무시하고 올리브영 다시 fetch */
   forceRefresh: z.boolean().optional(),
-  /** Tier 3 수동 폴백: 클라이언트에서 직접 입력한 데이터 전달 */
+  /** Tier 3 수동 폴백: 클라이언트에서 직접 입력한 데이터 전달.
+   *  북마클릿/콘솔 스니펫이 만든 JSON 도 같은 모양으로 들어온다. */
   manual: z
     .object({
       title: z.string(),
@@ -29,6 +30,7 @@ const Body = z.object({
       description: z.string().optional(),
       category: z.string().optional(),
       brand: z.string().optional(),
+      imageUrl: z.string().url().optional(),
     })
     .optional(),
 });
@@ -73,16 +75,18 @@ export async function POST(req: Request) {
 
     // Tier 3 (수동 입력) — fetch 우회
     if (parsed.data.manual) {
+      const m = parsed.data.manual;
       const product: Qoo10ProductData = {
         url: parsedUrl.url,
         productId: parsedUrl.productId,
-        title: parsed.data.manual.title,
-        description: parsed.data.manual.description,
-        category: parsed.data.manual.category,
-        brand: parsed.data.manual.brand,
+        title: m.title,
+        description: m.description,
+        category: m.category,
+        brand: m.brand,
+        images: m.imageUrl ? [m.imageUrl] : undefined,
         price:
-          parsed.data.manual.price != null
-            ? { current: parsed.data.manual.price, currency: 'KRW' }
+          m.price != null
+            ? { current: m.price, currency: 'KRW' }
             : undefined,
         fetchedAt: new Date().toISOString(),
         fetchMethod: 'tier3_manual',
