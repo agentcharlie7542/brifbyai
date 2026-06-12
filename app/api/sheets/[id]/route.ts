@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { z } from 'zod';
 
-import { getSheet, updateSheet } from '@/lib/db/repositories/sheets';
+import { getSheet, updateSheet, deleteSheet } from '@/lib/db/repositories/sheets';
 import { validate } from '@/lib/yakkihou/validator';
 import { flattenSheetText } from '@/lib/sheet/generator';
 import type { StructuredOrientSheet } from '@/lib/pdf-parser';
@@ -141,6 +141,62 @@ export async function PATCH(
     return NextResponse.json(
       {
         error: '시트 수정 중 오류가 발생했습니다.',
+        detail: err instanceof Error ? err.message : 'unknown',
+      },
+      { status: 500 }
+    );
+  }
+}
+
+export async function DELETE(
+  req: Request,
+  { params }: { params: { id: string } }
+) {
+  try {
+    const currentUser = await getCurrentUser();
+    // viewer 는 삭제 불가 — editor/admin 만.
+    if (!currentUser) {
+      return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+    }
+    if (currentUser.role === 'viewer') {
+      return NextResponse.json(
+        { error: 'viewer 권한으로는 시트를 삭제할 수 없습니다.' },
+        { status: 403 }
+      );
+    }
+
+    // 삭제 전 메타 (audit log 용 — 삭제 후엔 못 읽음)
+    const existing = await getSheet(params.id);
+    if (!existing) {
+      return NextResponse.json({ error: 'not found' }, { status: 404 });
+    }
+
+    const deleted = await deleteSheet(params.id);
+    if (!deleted) {
+      return NextResponse.json({ error: 'delete failed' }, { status: 500 });
+    }
+
+    const { ip, userAgent } = requestMeta(req);
+    await logAction({
+      userId: currentUser.userId,
+      action: 'delete_sheet',
+      entityType: 'sheet',
+      entityId: deleted.id,
+      brandId: deleted.brandId,
+      metadata: {
+        campaignName: existing.campaignName,
+        category: existing.category,
+      },
+      ip,
+      userAgent,
+    });
+
+    return NextResponse.json({ id: deleted.id, deleted: true });
+  } catch (err) {
+    console.error('[api/sheets/DELETE]', err);
+    return NextResponse.json(
+      {
+        error: '시트 삭제 중 오류가 발생했습니다.',
         detail: err instanceof Error ? err.message : 'unknown',
       },
       { status: 500 }

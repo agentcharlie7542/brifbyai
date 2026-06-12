@@ -1,9 +1,10 @@
 import Link from 'next/link';
 import { notFound } from 'next/navigation';
 import { unstable_noStore as noStore } from 'next/cache';
-import { FileText, Sparkles } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { getBrand } from '@/lib/db/repositories/brands';
 import { listSheetsByBrand } from '@/lib/db/repositories/sheets';
+import { SheetRow } from './sheet-row';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -57,36 +58,24 @@ export default async function BrandSheetsPage({
         ) : (
           <ul className="divide-y rounded-md border bg-card">
             {sheets.map((s) => (
-              <li key={s.id}>
-                <Link
-                  href={`/brands/${brand.id}/sheets/${s.id}`}
-                  className="flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted/50"
-                >
-                  <FileText className="h-4 w-4 text-muted-foreground" />
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate font-medium">{s.campaignName}</p>
-                    <p className="truncate text-xs text-muted-foreground">
-                      {s.category} · {s.targetMarket.toUpperCase()}
-                    </p>
-                  </div>
-                  {s.yakkihouSummary ? (
-                    <div className="flex gap-2 text-xs">
-                      <span className="text-yakkihou-safe">
-                        SAFE {s.yakkihouSummary.safe}
-                      </span>
-                      <span className="text-yakkihou-warn">
-                        WARN {s.yakkihouSummary.warn}
-                      </span>
-                      <span className="text-yakkihou-ng">
-                        NG {s.yakkihouSummary.ng}
-                      </span>
-                    </div>
-                  ) : null}
-                  <span className="text-xs text-muted-foreground">
-                    {new Date(s.updatedAt).toLocaleDateString('ko-KR')}
-                  </span>
-                </Link>
-              </li>
+              <SheetRow
+                key={s.id}
+                brandId={brand.id}
+                sheetId={s.id}
+                campaignName={s.campaignName}
+                category={s.category}
+                targetMarket={s.targetMarket}
+                yakkihouSummary={
+                  s.yakkihouSummary
+                    ? {
+                        safe: s.yakkihouSummary.safe,
+                        warn: s.yakkihouSummary.warn,
+                        ng: s.yakkihouSummary.ng,
+                      }
+                    : null
+                }
+                updatedAt={s.updatedAt.toISOString()}
+              />
             ))}
           </ul>
         )}

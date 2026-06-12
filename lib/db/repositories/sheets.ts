@@ -35,3 +35,18 @@ export async function updateSheet(
     .returning();
   return updated ?? null;
 }
+
+/**
+ * 시트 삭제. yakkihou_findings·influencer_proposals 는 schema 의 FK
+ * `onDelete: 'cascade'` 로 자동 정리된다. 삭제된 row 의 brandId 를 반환
+ * (audit log 에 entityType/entityId 로 남기기 위함).
+ */
+export async function deleteSheet(
+  id: string
+): Promise<{ id: string; brandId: string } | null> {
+  const [deleted] = await db
+    .delete(schema.sheets)
+    .where(eq(schema.sheets.id, id))
+    .returning({ id: schema.sheets.id, brandId: schema.sheets.brandId });
+  return deleted ?? null;
+}
