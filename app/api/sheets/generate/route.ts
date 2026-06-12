@@ -9,6 +9,13 @@ import { getCached, saveCached } from '@/lib/qoo10/cache';
 import { fetchProductHtml, Qoo10FetchError } from '@/lib/qoo10/fetcher';
 import { parseQoo10Html } from '@/lib/qoo10/parser';
 import type { Qoo10ProductData } from '@/lib/qoo10/types';
+import { parseOliveYoungUrl } from '@/lib/oliveyoung/url';
+import {
+  fetchProductHtml as fetchOyTier1,
+  fetchProductTier2 as fetchOyTier2,
+  OliveYoungFetchError,
+} from '@/lib/oliveyoung/fetcher';
+import { parseOliveYoungHtml } from '@/lib/oliveyoung/parser';
 import { generateSheet, flattenSheetText } from '@/lib/sheet/generator';
 import { validate } from '@/lib/yakkihou/validator';
 import type { ProductCategory } from '@/lib/yakkihou/types';
@@ -38,9 +45,37 @@ const Body = z.object({
 });
 
 async function getProduct(rawUrl: string): Promise<Qoo10ProductData> {
+  // URL 호스트 보고 Qoo10 / 올리브영 분기. 캐시는 Qoo10 캐시 저장소(productId 키)를 공유.
+  const oy = parseOliveYoungUrl(rawUrl);
+  if (oy) {
+    const cached = await getCached(oy.productId);
+    if (cached) return cached;
+    let html: string;
+    try {
+      ({ html } = await fetchOyTier1(oy.url));
+    } catch (tier1Err) {
+      if (
+        tier1Err instanceof OliveYoungFetchError &&
+        (tier1Err.kind === 'wall' || tier1Err.kind === 'empty')
+      ) {
+        ({ html } = await fetchOyTier2(oy.url));
+      } else {
+        throw tier1Err;
+      }
+    }
+    const product = parseOliveYoungHtml(html, oy.productId, oy.url);
+    if (!product.title) {
+      throw new Error('올리브영 페이지에서 상품명을 추출하지 못했습니다.');
+    }
+    await saveCached(product);
+    return product;
+  }
+
   const parsed = parseQoo10Url(rawUrl);
   if (!parsed) {
-    throw new Error('Qoo10 URL 형식이 아닙니다.');
+    throw new Error(
+      'Qoo10 또는 올리브영 URL 형식이 아닙니다.'
+    );
   }
   const cached = await getCached(parsed.productId);
   if (cached) return cached;
@@ -91,6 +126,16 @@ export async function POST(req: Request) {
             detail: err.message,
           },
           { status: 502 }
+        );
+      }
+      if (err instanceof OliveYoungFetchError) {
+        return NextResponse.json(
+          {
+            error:
+              '올리브영 fetch 실패. 새 시트 페이지에서 수동 입력 후 재시도하세요.',
+            detail: err.message,
+          },
+          { status: err.kind === 'wall' ? 503 : 502 }
         );
       }
       return NextResponse.json(

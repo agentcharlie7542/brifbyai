@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Image from 'next/image';
 import {
@@ -12,8 +12,30 @@ import {
   Search,
   Sparkles,
 } from 'lucide-react';
-import type { Qoo10ProductData } from '@/lib/qoo10/types';
+import type { Qoo10ProductData, ProductSource } from '@/lib/qoo10/types';
 import { cn } from '@/lib/utils';
+
+/**
+ * URL 호스트만 보고 Qoo10 / 올리브영을 자동 분기.
+ * 매칭 실패시 null → 사용자에게 "지원하지 않는 URL" 에러 노출.
+ */
+function detectSource(url: string): ProductSource | null {
+  const t = url.trim();
+  if (!t) return null;
+  if (/(?:^|\/\/|www\.)?qoo10\.jp/i.test(t)) return 'qoo10';
+  if (/(?:^|\/\/|www\.|m\.)?oliveyoung\.co\.kr/i.test(t)) return 'oliveyoung';
+  return null;
+}
+
+function formatPrice(p: NonNullable<Qoo10ProductData['price']>): string {
+  if (p.currency === 'KRW') return `₩${p.current.toLocaleString()}`;
+  return `¥${p.current.toLocaleString()}`;
+}
+
+const SOURCE_LABEL: Record<ProductSource, string> = {
+  qoo10: 'Qoo10 Japan',
+  oliveyoung: '올리브영',
+};
 
 const CATEGORIES = [
   { value: 'cosmetic', label: '화장품' },
@@ -55,15 +77,33 @@ export function NewSheetForm({ brandId, brandName }: Props) {
   const [state, setState] = useState<State>({ status: 'idle' });
   const [showManual, setShowManual] = useState(false);
 
+  const detected = useMemo(() => detectSource(url), [url]);
+
+  function endpointFor(source: ProductSource): string {
+    return source === 'oliveyoung'
+      ? '/api/oliveyoung/import'
+      : '/api/qoo10/import';
+  }
+
   async function importUrl(opts: { forceRefresh?: boolean } = {}) {
-    if (!url.trim()) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    const source = detectSource(trimmed);
+    if (!source) {
+      setState({
+        status: 'error',
+        message:
+          '지원하지 않는 URL 입니다. Qoo10(qoo10.jp) 또는 올리브영(oliveyoung.co.kr) 상품 URL 을 입력하세요.',
+      });
+      return;
+    }
     setState({ status: 'loading' });
     try {
-      const res = await fetch('/api/qoo10/import', {
+      const res = await fetch(endpointFor(source), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
-          url: url.trim(),
+          url: trimmed,
           forceRefresh: opts.forceRefresh,
         }),
       });
@@ -98,13 +138,23 @@ export function NewSheetForm({ brandId, brandName }: Props) {
     description?: string;
     category?: string;
   }) {
-    if (!url.trim()) return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    const source = detectSource(trimmed);
+    if (!source) {
+      setState({
+        status: 'error',
+        message:
+          '지원하지 않는 URL 입니다. Qoo10 또는 올리브영 상품 URL 을 입력하세요.',
+      });
+      return;
+    }
     setState({ status: 'loading' });
     try {
-      const res = await fetch('/api/qoo10/import', {
+      const res = await fetch(endpointFor(source), {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ url: url.trim(), manual: form }),
+        body: JSON.stringify({ url: trimmed, manual: form }),
       });
       const json = await res.json();
       if (!res.ok) {
@@ -131,28 +181,38 @@ export function NewSheetForm({ brandId, brandName }: Props) {
   return (
     <div className="space-y-6">
       <section className="rounded-lg border bg-card p-5 shadow-sm">
-        <label
-          htmlFor="qoo10-url"
-          className="text-sm font-medium"
-        >
-          Qoo10 상품 URL
+        <label htmlFor="source-url" className="text-sm font-medium">
+          상품 페이지 URL
         </label>
         <p className="mt-1 text-xs text-muted-foreground">
-          {brandName} · 일본 마켓 상품 페이지 URL을 붙여넣으세요. <code className="rounded bg-muted px-1">/g/</code> 또는 <code className="rounded bg-muted px-1">/item/</code> 형식 지원.
+          {brandName} ·{' '}
+          <span className="font-medium text-foreground">Qoo10 Japan</span> 또는{' '}
+          <span className="font-medium text-foreground">올리브영</span> 상품 URL 을 붙여넣으세요.
+          <br />
+          예) <code className="rounded bg-muted px-1">https://www.qoo10.jp/g/1200999394</code>
+          {' / '}
+          <code className="rounded bg-muted px-1">
+            https://www.oliveyoung.co.kr/store/goods/getGoodsDetail.do?goodsNo=A000000247884
+          </code>
         </p>
         <div className="mt-3 flex gap-2">
           <input
-            id="qoo10-url"
+            id="source-url"
             type="url"
             value={url}
             onChange={(e) => setUrl(e.target.value)}
-            placeholder="https://www.qoo10.jp/item/..../1200999394"
+            placeholder="Qoo10 또는 올리브영 상품 URL"
             className="flex-1 rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
             disabled={state.status === 'loading'}
             onKeyDown={(e) => {
               if (e.key === 'Enter') importUrl();
             }}
           />
+          {detected ? (
+            <span className="inline-flex items-center self-center rounded bg-muted px-2 py-0.5 text-[10px] font-medium text-muted-foreground">
+              {SOURCE_LABEL[detected]} 감지됨
+            </span>
+          ) : null}
           <button
             type="button"
             onClick={() => importUrl()}
@@ -549,19 +609,19 @@ function ProductPreview({
               rel="noreferrer"
               className="mt-1 inline-flex items-center gap-1 text-xs text-muted-foreground hover:underline"
             >
-              Qoo10에서 열기
+              {product.source === 'oliveyoung' ? '올리브영' : 'Qoo10'}에서 열기
               <ExternalLink className="h-3 w-3" />
             </a>
           </div>
 
           <dl className="grid grid-cols-3 gap-3 text-xs">
             <Field label="가격">
-              {product.price
-                ? `¥${product.price.current.toLocaleString()}`
-                : '—'}
+              {product.price ? formatPrice(product.price) : '—'}
             </Field>
             <Field label="카테고리">{product.category ?? '—'}</Field>
-            <Field label="셀러">{product.seller ?? '—'}</Field>
+            <Field label={product.source === 'oliveyoung' ? '브랜드' : '셀러'}>
+              {product.brand ?? product.seller ?? '—'}
+            </Field>
           </dl>
 
           {product.description ? (

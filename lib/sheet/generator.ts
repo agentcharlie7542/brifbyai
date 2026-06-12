@@ -83,8 +83,10 @@ function buildUserMessage(input: SheetGenerateInput): string {
       description: input.product.description,
       category: input.product.category,
       features: input.product.features?.slice(0, 12),
+      brand: input.product.brand,
       seller: input.product.seller,
       url: input.product.url,
+      source: input.product.source ?? 'qoo10',
     },
     null,
     2
@@ -101,11 +103,14 @@ function buildUserMessage(input: SheetGenerateInput): string {
     2
   );
 
+  const sourceLabel =
+    input.product.source === 'oliveyoung' ? '올리브영(KR)' : 'Qoo10(JP)';
+
   return [
     `[브랜드]`,
     brandJson,
     '',
-    `[Qoo10 상품]`,
+    `[상품 (소스: ${sourceLabel})]`,
     truncate(productJson, 3000),
     '',
     `[제품 카테고리] ${input.category}`,
