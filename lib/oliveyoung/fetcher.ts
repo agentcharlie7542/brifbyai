@@ -196,9 +196,13 @@ export async function fetchProductHtml(url: string): Promise<{
     });
 
     if (!res.ok) {
+      // 올리브영은 봇 차단 시 HTTP 403 (+ 본문이 "잠시만 기다려 주세요" 페이지) 으로 응답한다.
+      // → 403 은 'wall' 로 분류해 Tier 2(Playwright) 폴백을 자동 트리거.
+      const kind: OliveYoungFetchErrorKind =
+        res.status === 403 ? 'wall' : 'http';
       throw new OliveYoungFetchError(
         `올리브영 fetch failed (HTTP ${res.status})`,
-        { status: res.status, kind: 'http' }
+        { status: res.status, kind }
       );
     }
     const html = await res.text();
