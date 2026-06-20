@@ -10,6 +10,7 @@ import {
   ListChecks,
   LogOut,
   Plus,
+  ScanSearch,
   Settings,
   ShieldCheck,
   Sparkles,
@@ -39,7 +40,7 @@ export function BrandSidebar({
   const activeBrand = brands.find((b) => b.id === activeBrandId);
 
   return (
-    <aside className="flex h-screen w-64 shrink-0 flex-col border-r bg-muted/30">
+    <aside className="flex h-screen w-64 shrink-0 flex-col border-r bg-muted/30 print:hidden">
       <div className="border-b px-4 py-4">
         <Link href="/brands" className="flex items-center gap-2">
           <div className="flex h-7 w-7 items-center justify-center rounded-md bg-primary text-primary-foreground">
@@ -166,6 +167,13 @@ export function BrandSidebar({
         </SidebarSection>
 
         <SidebarSection label="Tools">
+          <SidebarLink
+            href="/inspect"
+            icon={<ScanSearch className="h-4 w-4" />}
+            active={pathname.startsWith('/inspect')}
+          >
+            상세페이지 검수
+          </SidebarLink>
           <SidebarLink
             href="/validate"
             icon={<ShieldCheck className="h-4 w-4" />}

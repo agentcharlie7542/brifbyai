@@ -87,7 +87,7 @@ function isServerless(): boolean {
   return Boolean(process.env.VERCEL || process.env.AWS_LAMBDA_FUNCTION_NAME);
 }
 
-async function launchBrowser() {
+export async function launchBrowser() {
   // 동적 import: Tier 1 전용 경로/배포에서는 playwright-core 가 로드되지 않음
   const { chromium } = await import('playwright-core');
   const extraArgs = ['--disable-blink-features=AutomationControlled'];
