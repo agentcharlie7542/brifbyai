@@ -234,6 +234,7 @@ export async function POST(req: Request) {
       category: parsed.data.category as ProductCategory,
       content: sheet as Record<string, unknown>,
       yakkihouSummary,
+      createdBy: currentUser?.name ?? null,
       createdById: currentUser?.userId ?? null,
       updatedById: currentUser?.userId ?? null,
     });

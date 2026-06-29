@@ -12,6 +12,8 @@ export interface AuditLogRow {
   createdAt: Date;
   userEmail: string | null;
   userName: string | null;
+  userNameFromMeta: string | null;
+  userEmailFromMeta: string | null;
 }
 
 export async function listAuditLogs(
@@ -33,6 +35,9 @@ export async function listAuditLogs(
       createdAt: schema.auditLogs.createdAt,
       userEmail: schema.users.email,
       userName: schema.users.name,
+      // metadata user snapshot (if stored)
+      userNameFromMeta: db.raw("(metadata->>'userName')::text"),
+      userEmailFromMeta: db.raw("(metadata->>'userEmail')::text"),
     })
     .from(schema.auditLogs)
     .leftJoin(schema.users, eq(schema.auditLogs.userId, schema.users.id))

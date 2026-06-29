@@ -26,9 +26,19 @@ export interface InspectOptions {
   /** Layer 3(Claude 판정) 비활성화. 기본 true(룰셋만 — 빠르고 무료). */
   skipLayer3?: boolean;
   modelOverride?: string;
+  /**
+   * 마감 시각(epoch ms). Vercel Hobby 의 60s 함수 한도 안에 반드시 JSON 을 돌려주기 위해,
+   * 이 시각이 가까워지면 남은 OCR 을 건너뛰고(부분 결과), L3 판정을 먼저 끈다.
+   * 미지정이면 시간 가드 없이 전부 처리.
+   */
+  deadlineAt?: number;
 }
 
-const OCR_CONCURRENCY = 4;
+const OCR_CONCURRENCY = 6;
+/** OCR 은 마감 이만큼 전에 멈춘다(검증·직렬화 여유). */
+const OCR_RESERVE_MS = 8_000;
+/** 마감 이만큼 전부터는 L3(Claude) 를 끄고 룰셋만으로 판정. */
+const L3_RESERVE_MS = 4_000;
 
 function mediaTypeOf(dataUrl: string): OcrMediaType {
   const m = dataUrl.match(/^data:(image\/(?:jpeg|png|webp|gif));base64,/i);
@@ -61,10 +71,18 @@ async function mapPool<T, R>(
 
 export async function runInspect(opts: InspectOptions): Promise<InspectResult> {
   const skipLayer3 = opts.skipLayer3 ?? true;
+  const deadlineAt = opts.deadlineAt;
+  // 마감이 가까워 OCR 을 건너뛴 이미지 인덱스(부분 검수 표기용).
+  const pendingImages: number[] = [];
 
   // ── 1) 이미지별 OCR (병렬) ──────────────────────────────
   const ocrPerImage = await mapPool(opts.images, OCR_CONCURRENCY, async (img, idx) => {
     if (!opts.apiKey) return [];
+    // 시간 예산 초과 → 이 이미지는 OCR 건너뛰고 "미검수"로 보고(조용한 누락 방지).
+    if (deadlineAt && Date.now() > deadlineAt - OCR_RESERVE_MS) {
+      pendingImages.push(idx);
+      return [];
+    }
     try {
       const blocks = await ocrImage(
         { base64: img.dataUrl, mediaType: mediaTypeOf(img.dataUrl) },
@@ -84,11 +102,14 @@ export async function runInspect(opts: InspectOptions): Promise<InspectResult> {
 
   // ── 2) 블록별 약기법 검증 ───────────────────────────────
   const inspectBlocks = await mapPool(ocrBlocks, OCR_CONCURRENCY, async (block) => {
+    // 마감 임박 시 L3(Claude) 를 먼저 끄고 룰셋만으로 — 함수 한도 초과(크래시) 회피.
+    const blockSkipLayer3 =
+      skipLayer3 || (deadlineAt ? Date.now() > deadlineAt - L3_RESERVE_MS : false);
     const res = await validate({
       text: block.text,
       category: opts.category,
       apiKey: opts.apiKey,
-      skipLayer3,
+      skipLayer3: blockSkipLayer3,
       modelOverride: opts.modelOverride,
     });
     const ib: InspectBlock = {
@@ -122,6 +143,8 @@ export async function runInspect(opts: InspectOptions): Promise<InspectResult> {
       imageCount: opts.images.length,
       blockCount: inspectBlocks.length,
       layer3: !skipLayer3,
+      partial: pendingImages.length > 0,
+      pendingImages: pendingImages.sort((a, b) => a - b),
     },
   };
 }

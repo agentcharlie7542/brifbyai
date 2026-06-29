@@ -37,6 +37,69 @@ export const socialPlatformEnum = pgEnum('social_platform', [
   'tiktok',
 ]);
 
+// ──────────────────────────────────────────────────────────────────────────
+// Trend KeyWord 매칭 (Language Packaging Engine) enums
+// ──────────────────────────────────────────────────────────────────────────
+
+/** 매칭유형: A=한자직수용 B=음차외래어 C=의미현지화 D=시장재정의 X=직역(사용지양) */
+export const matchTypeEnum = pgEnum('match_type', ['A', 'B', 'C', 'D', 'X']);
+
+export const scriptTypeEnum = pgEnum('script_type', [
+  'KANJI',
+  'KATAKANA',
+  'HIRAGANA',
+  'MIXED',
+  'ROMAN',
+  'UNKNOWN',
+]);
+
+export const exposureLevelEnum = pgEnum('exposure_level', [
+  'HIGH',
+  'MID',
+  'LOW',
+]);
+
+export const aversionLevelEnum = pgEnum('aversion_level', [
+  'LOW',
+  'MID',
+  'HIGH',
+]);
+
+/** 약기법 리스크. 기존 yakkihou_level(SAFE/WARN/NG)과 별개 개념 */
+export const yakkihouRiskEnum = pgEnum('yakkihou_risk', [
+  'SAFE',
+  'CAUTION',
+  'PROHIBITED',
+]);
+
+export const igCountStatusEnum = pgEnum('ig_count_status', [
+  'VERIFIED',
+  'ESTIMATED',
+]);
+
+export const trendVerificationStatusEnum = pgEnum('trend_verification_status', [
+  'PENDING',
+  'VERIFIED',
+  'REJECTED',
+]);
+
+export const usageContextEnum = pgEnum('usage_context', [
+  'TITLE',
+  'TAG',
+  'BODY',
+  'AD',
+]);
+
+export const brandTermTypeEnum = pgEnum('brand_term_type', [
+  'OWNED',
+  'COMPETITOR',
+]);
+
+export const trendTermStatusEnum = pgEnum('trend_term_status', [
+  'ACTIVE',
+  'DEPRECATED',
+]);
+
 export const brands = pgTable('brands', {
   id: uuid('id').defaultRandom().primaryKey(),
   name: varchar('name', { length: 128 }).notNull(),
@@ -237,6 +300,100 @@ export const influencerProposals = pgTable('influencer_proposals', {
     .default(sql`now()`),
 });
 
+// ──────────────────────────────────────────────────────────────────────────
+// Trend KeyWord 매칭 (Language Packaging Engine)
+// 한국 트렌드 워드 → 일본 현지 매칭어. 초기 DB 는 scripts/seed-trend-words.mjs 로 시드.
+// ──────────────────────────────────────────────────────────────────────────
+
+export const krTrendTerms = pgTable('kr_trend_terms', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  /** 한국어 트렌드 워드 (예: 물광피부) */
+  krTerm: varchar('kr_term', { length: 128 }).notNull(),
+  /** 대분류 (카테고리의 '/' 앞, 예: 스킨케어) */
+  category: varchar('category', { length: 64 }),
+  /** 세부분류 (카테고리의 '/' 뒤, 예: 광택) */
+  subCategory: varchar('sub_category', { length: 64 }),
+  /** 동의어 그룹 키 (MVP = 정규화된 krTerm) */
+  synonymGroup: varchar('synonym_group', { length: 128 }),
+  /** 한국 시장 트렌드 강도 (현재 CSV 미제공 → null) */
+  trendScore: integer('trend_score'),
+  /** 최초 관측 채널 */
+  sourceChannel: varchar('source_channel', { length: 64 }),
+  status: trendTermStatusEnum('status').notNull().default('ACTIVE'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const jpMatchedTerms = pgTable('jp_matched_terms', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  krTermId: uuid('kr_term_id')
+    .notNull()
+    .references(() => krTrendTerms.id, { onDelete: 'cascade' }),
+  /** 언어 코드 (다국어 확장 대비, 기본 'ja') */
+  langCode: varchar('lang_code', { length: 8 }).notNull().default('ja'),
+  /** 일본어 매칭어 ★추천 (예: 水光肌) */
+  jpTerm: varchar('jp_term', { length: 128 }).notNull(),
+  /** 읽기 (예: すいこうはだ) */
+  jpReading: varchar('jp_reading', { length: 128 }),
+  /** 직역(기준선) — 비교용. 예: 蜂蜜光肌 */
+  literalBaseline: varchar('literal_baseline', { length: 128 }),
+  scriptType: scriptTypeEnum('script_type'),
+  matchType: matchTypeEnum('match_type'),
+  /** 후보 우선순위 (1=최우선). 사용자가 등록하는 1·2순위가 여기 저장 */
+  priorityRank: integer('priority_rank').notNull().default(9),
+  usageContext: usageContextEnum('usage_context'),
+  /** IG 해시태그 인용 수 */
+  igHashtagCount: integer('ig_hashtag_count'),
+  /** 해시태그 수의 신뢰도 (실측 VERIFIED / 추정 ESTIMATED) */
+  igCountStatus: igCountStatusEnum('ig_count_status')
+    .notNull()
+    .default('ESTIMATED'),
+  exposureLevel: exposureLevelEnum('exposure_level'),
+  aversionLevel: aversionLevelEnum('aversion_level'),
+  /** 검색량 지표 (현재 CSV 미제공 → null) */
+  jpSearchVolume: integer('jp_search_volume'),
+  platform: varchar('platform', { length: 32 }),
+  /** 종합 신뢰도 (추후 산출 → null) */
+  confidenceScore: integer('confidence_score'),
+  yakkihouRisk: yakkihouRiskEnum('yakkihou_risk'),
+  yakkihouNote: text('yakkihou_note'),
+  nuanceNote: text('nuance_note'),
+  /** 채택 브랜드 예시 */
+  brandAdoption: jsonb('brand_adoption').$type<string[]>(),
+  /** 연관 추천 키워드 */
+  relatedKeywords: jsonb('related_keywords').$type<string[]>(),
+  /** 출처: SEED(초기사전) | LLM(Claude 제안) | USER(사용자 등록) */
+  source: varchar('source', { length: 16 }).notNull().default('SEED'),
+  verificationStatus: trendVerificationStatusEnum('verification_status')
+    .notNull()
+    .default('PENDING'),
+  verifiedBy: varchar('verified_by', { length: 128 }),
+  verifiedDate: timestamp('verified_date', { withTimezone: true }),
+  // NOTE: 의미 매칭용 embedding VECTOR 컬럼은 Phase 2.5 확장점 (pgvector 미설치).
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
+export const brandTermConventions = pgTable('brand_term_conventions', {
+  id: uuid('id').defaultRandom().primaryKey(),
+  /** 브랜드명 (' ★자사' 표기 제거) */
+  brand: varchar('brand', { length: 64 }).notNull(),
+  /** 자사(OWNED) / 경쟁사(COMPETITOR) */
+  brandType: brandTermTypeEnum('brand_type').notNull(),
+  /** 유형 원문 (예: JP진출 K뷰티, 펨케어/이너) */
+  categoryHint: varchar('category_hint', { length: 64 }),
+  styleNote: text('style_note'),
+  /** 대표 채택어 */
+  adoptedTerms: jsonb('adopted_terms').$type<string[]>(),
+  /** 회피·주의 표현 */
+  avoidTerms: text('avoid_terms'),
+  createdAt: timestamp('created_at', { withTimezone: true })
+    .notNull()
+    .default(sql`now()`),
+});
+
 export type User = typeof users.$inferSelect;
 export type NewUser = typeof users.$inferInsert;
 export type AuditLog = typeof auditLogs.$inferSelect;
@@ -256,3 +413,10 @@ export type Sheet = typeof sheets.$inferSelect;
 export type NewSheet = typeof sheets.$inferInsert;
 export type YakkihouFinding = typeof yakkihouFindings.$inferSelect;
 export type NewYakkihouFinding = typeof yakkihouFindings.$inferInsert;
+
+export type KrTrendTerm = typeof krTrendTerms.$inferSelect;
+export type NewKrTrendTerm = typeof krTrendTerms.$inferInsert;
+export type JpMatchedTerm = typeof jpMatchedTerms.$inferSelect;
+export type NewJpMatchedTerm = typeof jpMatchedTerms.$inferInsert;
+export type BrandTermConvention = typeof brandTermConventions.$inferSelect;
+export type NewBrandTermConvention = typeof brandTermConventions.$inferInsert;

@@ -95,7 +95,7 @@ export default async function AuditPage({
                     {new Date(l.createdAt).toLocaleString('ko-KR')}
                   </td>
                   <td className="px-4 py-2">
-                    {l.userName || l.userEmail || (
+                    {l.userName || l.userNameFromMeta || l.userEmail || l.userEmailFromMeta || (
                       <span className="text-muted-foreground">—</span>
                     )}
                     {l.userEmail && l.userName ? (

@@ -1,6 +1,6 @@
 {
   "name": "brifbyai",
-  "version": "0.1.0",
+  "version": "1.3.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
@@ -12,7 +12,8 @@
     "db:migrate": "dotenv -e .env.local -- drizzle-kit migrate",
     "db:studio": "dotenv -e .env.local -- drizzle-kit studio",
     "db:seed": "node --env-file=.env.local scripts/seed-brands.mjs",
-    "db:seed-admin": "node --env-file=.env.local scripts/seed-admin.mjs"
+    "db:seed-admin": "node --env-file=.env.local scripts/seed-admin.mjs",
+    "db:seed-trends": "node --env-file=.env.local scripts/seed-trend-words.mjs"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.32.1",

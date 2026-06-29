@@ -65,3 +65,33 @@
     @apply bg-yakkihou-ng/20 text-yakkihou-ng underline decoration-yakkihou-ng decoration-2 underline-offset-2;
   }
 }
+
+/* PDF 저장/인쇄 — 시트 본문만 깔끔하게 출력 */
+@media print {
+  @page {
+    margin: 14mm;
+  }
+
+  /* 카드/뱃지 배경색이 PDF 에 그대로 보이도록 */
+  *,
+  *::before,
+  *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+  }
+
+  html,
+  body {
+    background: #fff !important;
+  }
+
+  /* 화면 전용 여백 제거 (@page margin 으로 대체) */
+  main {
+    padding: 0 !important;
+  }
+
+  /* 카드가 페이지 경계에서 가능한 한 잘리지 않도록 */
+  section {
+    break-inside: avoid;
+  }
+}

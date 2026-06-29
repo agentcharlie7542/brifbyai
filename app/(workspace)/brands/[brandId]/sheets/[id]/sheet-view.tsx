@@ -133,7 +133,7 @@ export function SheetView({ initial }: { initial: SheetSnapshot }) {
             <button
               type="button"
               onClick={startEdit}
-              className="inline-flex items-center rounded-md border border-input bg-background px-3 py-1.5 text-xs shadow-sm hover:bg-accent"
+              className="inline-flex items-center rounded-md border border-input bg-background px-3 py-1.5 text-xs shadow-sm hover:bg-accent print:hidden"
             >
               <Pencil className="mr-1 h-3 w-3" />
               편집

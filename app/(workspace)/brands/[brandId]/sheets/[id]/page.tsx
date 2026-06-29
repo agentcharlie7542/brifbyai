@@ -10,6 +10,7 @@ import {
 import type { StructuredOrientSheet } from '@/lib/pdf-parser';
 import { SheetView } from './sheet-view';
 import { SheetProposals } from './sheet-proposals';
+import { SheetPdfButton } from './sheet-pdf-button';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -37,7 +38,7 @@ export default async function SheetDetailPage({
       <div className="mx-auto max-w-4xl">
         <Link
           href={`/brands/${brand.id}/sheets`}
-          className="text-sm text-muted-foreground hover:underline"
+          className="text-sm text-muted-foreground hover:underline print:hidden"
         >
           ← {brand.name} · 시트 목록
         </Link>
@@ -74,6 +75,10 @@ export default async function SheetDetailPage({
             yakkihouSummary: p.yakkihouSummary,
             updatedAt: p.updatedAt.toISOString(),
           }))}
+        />
+
+        <SheetPdfButton
+          fileName={`${brand.name}_${sheet.campaignName}_orient`}
         />
       </div>
     </main>

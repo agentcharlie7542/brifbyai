@@ -56,6 +56,10 @@ export interface InspectResult {
     imageCount: number;
     blockCount: number;
     layer3: boolean;
+    /** 60s 함수 한도(Hobby) 안에 못 끝내 일부 이미지를 OCR 검수하지 못했는지. */
+    partial: boolean;
+    /** OCR 검수를 건너뛴 이미지 인덱스(시간 초과). 화면에서 "미검수" 표기에 사용. */
+    pendingImages: number[];
   };
 }
 

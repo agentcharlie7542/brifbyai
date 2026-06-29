@@ -5,6 +5,7 @@
  */
 import { db, schema } from '@/db';
 import type { NewAuditLog } from '@/db/schema';
+import { getUserById } from '@/lib/db/repositories/users';
 
 export type AuditAction =
   | 'login'
@@ -34,13 +35,28 @@ export interface LogActionInput {
 
 export async function logAction(input: LogActionInput): Promise<void> {
   try {
+    // Best-effort: enrich metadata with user name/email snapshot so that
+    // audit entries remain informative even if the user row is later deleted/changed.
+    const meta = { ...(input.metadata ?? {}) } as Record<string, unknown>;
+    if (input.userId) {
+      try {
+        const u = await getUserById(input.userId);
+        if (u) {
+          if (u.name) meta.userName = u.name;
+          if (u.email) meta.userEmail = u.email;
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
     const row: NewAuditLog = {
       userId: input.userId ?? null,
       action: input.action,
       entityType: input.entityType,
       entityId: input.entityId,
       brandId: input.brandId,
-      metadata: input.metadata,
+      metadata: Object.keys(meta).length ? meta : null,
       ip: input.ip,
       userAgent: input.userAgent,
     };

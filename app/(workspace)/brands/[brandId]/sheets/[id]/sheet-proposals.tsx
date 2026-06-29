@@ -63,7 +63,7 @@ export function SheetProposals({
   }
 
   return (
-    <section className="mt-10 rounded-lg border bg-card p-6 shadow-sm">
+    <section className="mt-10 rounded-lg border bg-card p-6 shadow-sm print:hidden">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="flex items-center gap-2 text-base font-semibold">

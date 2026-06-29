@@ -54,6 +54,11 @@ export async function POST(req: Request) {
     }
     const { category, url, images, useClaude } = parsed.data;
 
+    // Vercel Hobby 의 60s 함수 한도. 마감 전에 반드시 JSON(부분 결과)을 돌려주기 위한 예산.
+    const startedAt = Date.now();
+    const deadlineAt = startedAt + 52_000; // 직렬화·콜드스타트 여유로 8s 남김
+    const captureDeadlineAt = startedAt + 28_000; // 캡쳐는 28s 안에 끝내고 OCR 에 시간 양보
+
     const apiKey = process.env.CLAUDE_ADMIN_KEY;
     if (!apiKey) {
       return NextResponse.json(
@@ -75,7 +80,9 @@ export async function POST(req: Request) {
         );
       }
       try {
-        const captured = await captureDetailImages(parsedUrl.url);
+        const captured = await captureDetailImages(parsedUrl.url, {
+          deadlineAt: captureDeadlineAt,
+        });
         scanImages = captured.images;
       } catch (err) {
         if (err instanceof Qoo10FetchError) {
@@ -115,6 +122,7 @@ export async function POST(req: Request) {
       source,
       apiKey,
       skipLayer3: !useClaude,
+      deadlineAt,
     });
 
     // 감사 로그 (best-effort)

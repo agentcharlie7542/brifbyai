@@ -5,6 +5,7 @@ import { usePathname } from 'next/navigation';
 import {
   Building2,
   FileText,
+  Languages,
   LayoutDashboard,
   Library,
   ListChecks,
@@ -28,9 +29,12 @@ interface SidebarUser {
 export function BrandSidebar({
   brands,
   user,
+  version,
 }: {
   brands: Pick<Brand, 'id' | 'name' | 'nameJa'>[];
   user?: SidebarUser | null;
+  /** package.json 버전 (단일 소스). 레이아웃에서 주입. */
+  version?: string;
 }) {
   const pathname = usePathname();
   const match = pathname.match(/^\/brands\/([^\/]+)/);
@@ -181,14 +185,30 @@ export function BrandSidebar({
           >
             약기법 플레이그라운드
           </SidebarLink>
+          <SidebarLink
+            href="/trend-words"
+            icon={<Languages className="h-4 w-4" />}
+            active={pathname.startsWith('/trend-words')}
+          >
+            Trend KeyWord 매칭
+          </SidebarLink>
           {user?.role === 'admin' ? (
-            <SidebarLink
-              href="/admin/audit"
-              icon={<ListChecks className="h-4 w-4" />}
-              active={pathname.startsWith('/admin/audit')}
-            >
-              감사 로그
-            </SidebarLink>
+            <>
+              <SidebarLink
+                href="/admin/users"
+                icon={<Users className="h-4 w-4" />}
+                active={pathname.startsWith('/admin/users')}
+              >
+                가입 신청 / 사용자
+              </SidebarLink>
+              <SidebarLink
+                href="/admin/audit"
+                icon={<ListChecks className="h-4 w-4" />}
+                active={pathname.startsWith('/admin/audit')}
+              >
+                감사 로그
+              </SidebarLink>
+            </>
           ) : null}
         </SidebarSection>
       </nav>

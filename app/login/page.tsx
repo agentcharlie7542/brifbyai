@@ -80,6 +80,8 @@ export default function LoginPage({
           내부 도구입니다. 계정으로 로그인하세요.
         </p>
 
+        {/* Public credentials removed per policy — use your account to sign in. */}
+
         <label className="mt-6 block text-sm font-medium">이메일</label>
         <input
           name="email"
@@ -111,6 +113,9 @@ export default function LoginPage({
         >
           로그인
         </button>
+        <div className="mt-3 text-center text-sm">
+          아직 계정이 없으신가요? <a href="/register" className="font-medium text-primary">회원가입</a>
+        </div>
       </form>
     </main>
   );

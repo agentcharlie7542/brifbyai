@@ -91,8 +91,37 @@ export function InspectClient() {
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify(body),
       });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json?.detail ?? json?.error ?? `HTTP ${res.status}`);
+      // 함수 타임아웃/크래시 시 Vercel 은 JSON 이 아닌 HTML 에러 페이지를 준다 →
+      // res.json() 을 곧장 부르면 "Unexpected token 'A'" 로 터지므로 안전하게 파싱.
+      const rawText = await res.text();
+      let json: unknown = null;
+      try {
+        json = rawText ? JSON.parse(rawText) : null;
+      } catch {
+        json = null;
+      }
+      if (!res.ok || !json) {
+        if (!json) {
+          if (
+            res.status === 504 ||
+            res.status === 500 ||
+            /timeout|an error occurred|FUNCTION_INVOCATION/i.test(rawText)
+          ) {
+            throw new Error(
+              '검수가 60초 안에 끝나지 않았습니다(상세가 길거나 서버 한도 초과). ' +
+                'Layer 3 체크를 끄거나, 「이미지 직접 업로드」 모드로 나눠서 검수해 주세요.'
+            );
+          }
+          const snippet = rawText
+            .replace(/<[^>]+>/g, ' ')
+            .replace(/\s+/g, ' ')
+            .trim()
+            .slice(0, 160);
+          throw new Error(snippet || `HTTP ${res.status}`);
+        }
+        const j = json as { detail?: string; error?: string };
+        throw new Error(j.detail ?? j.error ?? `HTTP ${res.status}`);
+      }
       setResult(json as InspectResult);
       setTab('image');
     } catch (err) {
@@ -304,6 +333,16 @@ export function InspectClient() {
             </span>
           </div>
 
+          {/* 부분 검수 경고: 60s 한도로 일부 이미지를 OCR 검수하지 못함 */}
+          {result.meta.partial ? (
+            <div className="rounded-md border border-yakkihou-warn/40 bg-yakkihou-warn/10 px-4 py-2.5 text-xs text-yakkihou-warn">
+              ⏳ 상세가 길어 {result.meta.pendingImages.length}장(캡쳐{' '}
+              {result.meta.pendingImages.map((i) => i + 1).join(', ')})은 60초 한도 안에 검수하지
+              못했습니다. <span className="font-medium">Layer 3 체크를 끄거나</span> 「이미지 직접
+              업로드」 모드로 나눠서 검수하면 전부 확인할 수 있습니다.
+            </div>
+          ) : null}
+
           {/* 탭 */}
           <div className="flex gap-1 border-b text-sm">
             <TabButton active={tab === 'image'} onClick={() => setTab('image')} icon={<ImageIcon className="h-4 w-4" />}>
@@ -323,7 +362,14 @@ export function InspectClient() {
               <div className="space-y-4">
                 {result.images.map((img, idx) => (
                   <div key={idx}>
-                    <p className="mb-1 text-xs text-muted-foreground">캡쳐 {idx + 1}</p>
+                    <p className="mb-1 text-xs text-muted-foreground">
+                      캡쳐 {idx + 1}
+                      {result.meta.pendingImages.includes(idx) ? (
+                        <span className="ml-2 font-medium text-yakkihou-warn">
+                          ⏳ 시간 초과 — 미검수
+                        </span>
+                      ) : null}
+                    </p>
                     <InspectOverlay image={img} blocks={result.blocks} imageIndex={idx} />
                   </div>
                 ))}
