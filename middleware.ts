@@ -1,8 +1,8 @@
 import { NextResponse, type NextRequest } from 'next/server';
 import { SESSION_COOKIE, verifySessionToken } from '@/lib/auth/session';
 
-// 로그인 페이지(및 그 서버 액션 POST)는 게이트 밖.
-const PUBLIC_PATHS = ['/login', '/api/diag'];
+// 로그인·회원가입 페이지(및 그 서버 액션/ API POST)는 게이트 밖.
+const PUBLIC_PATHS = ['/login', '/register', '/api/auth/register', '/api/diag'];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
